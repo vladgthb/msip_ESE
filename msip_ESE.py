@@ -71,6 +71,7 @@ available_script_options = ["-excelFile",                   # Index[0] Excel fil
                             "-referenceProjectRelease",     # Index[4] Reference Project Release
                             "-runDirectory",                # Index[5] Script Run Directory
                             "-executedTestCasePackages"     # Index[6] Executed test case package(s)
+                            "-projectsRootDirectory"        # Index[7] Projects root directory path
                             ]
 
 
@@ -124,6 +125,36 @@ available_excel_options = ["Test Case Name",
 # --------------------------------------------------- #
 
 
+def print_description(violated_case):
+    """
+    The script is printing description
+    :param violated_case: String why the
+    :return:
+    """
+
+    # Description
+    description = """
+        USAGE:  program <OPTION(S)>
+                EXAMPLE: msip_ESE.py -excelFile ./x649_bias_check_test_case.xlsx
+
+        OPTIONS:
+                {0}
+
+        DESCRIPTION:
+                The script is running ESE GUI for executing its flow.
+                ESE - Extraction and Simulation Evaluation flow is for evaluating the CCS/PCS setup updates' impact in simulation results.
+
+        FOR SUPPORT(BUG/ENHANCEMENT):
+                Please send e-mail to "vlad@synopsys.com"
+
+        AUTHOR:
+                Vladimir Danielyan
+        """.format(get_script_options_string())
+
+    print("\n\n\t" + str(violated_case) + "\n\n")
+    exit(description)
+
+
 def get_latest_release_version(releases_list):
     """
     The function is returning latest release version from input list of releases
@@ -151,7 +182,7 @@ def get_script_options_string():
 
     global available_script_options
 
-    final_string = "\t"
+    final_string = ""
     for option_name in available_script_options:
         final_string += str(option_name) + "\n\t\t"
 
@@ -471,16 +502,54 @@ class ScriptArguments:
     The class is grabbing input parameters of the script
     """
 
+    global available_script_options
+
     def __init__(self):
         """
         Input Class's __init__ function
         """
 
-        # The objects log Name
-        self.object_log_name = get_class_name(self)
+        self.user_arguments = self.get_all_arguments()
 
-        # Storing all arguments in variable
-        self.user_arguments = sys.argv
+        for input_argument_value in self.user_arguments:
+            self.check_if_help_option(input_argument_value)
+
+    @staticmethod
+    def get_all_arguments():
+        """
+        The function is checking and getting the script inputs information
+        :return:
+        """
+
+        user_arguments = sys.argv
+
+        if get_list_length(user_arguments) < 2:
+            print_description("ERROR!:\tNo any option selected")
+        else:
+            del user_arguments[0]
+            return user_arguments
+
+    @staticmethod
+    def check_if_help_option(input_argument):
+        """
+        The function is checking if the user use help option in arguments
+        :param input_argument:
+        :return:
+        """
+
+        available_help_options = ["-h", "--h", "-help", "--help"]
+
+        for help_option in available_help_options:
+            if input_argument == help_option:
+                print_description("Help Option Selected")
+
+    def get_user_all_inputs(self):
+        """
+        The main function of the arguments grabbing class
+        :return: The class object
+        """
+
+        return self.user_arguments
 
 
 class MsipEse:
@@ -537,7 +606,31 @@ class MsipEse:
         # The test cases files path directory
         self.scripts_test_cases_directory = ""
 
+        # The user arguments
+        self.user_script_inputs = []
+
         self.set_script_all_property()
+
+    # --------------------------------------------------- #
+    # ----------------- Class Functions ----------------- #
+    # --------------------------------------------------- #
+
+    def set_user_script_arguments(self, user_arguments):
+        """
+        The function is setting user arguments
+        :return:
+        """
+
+        self.user_script_inputs = user_arguments
+
+    @property
+    def get_user_script_arguments(self):
+        """
+        The function is returning scripts user arguments
+        :return:
+        """
+
+        return self.user_script_inputs
 
     def set_script_all_property(self):
         """
@@ -740,6 +833,73 @@ class MsipEse:
 
         return self.projects_root_dir
 
+    # --------------------------------------------------- #
+    # ----------------- Internal Class ------------------ #
+    # --------------------------------------------------- #
+
+    class ScriptInputs:
+        """
+        The Script Input class, which will check for script input correctness
+        """
+
+        # --------------------------------------------------- #
+        # ------------ Initialase Default Values ------------ #
+        # --------------------------------------------------- #
+
+        def __init__(self):
+            """
+            Project Main Run Class __init__ function
+            """
+
+            self.all_arguments = MsipEse.get_user_script_arguments()
+
+        @staticmethod
+        def get_option_name_and_value(option_name, argument_list):
+            """
+            The function is returning option name and value. If it is not under available option or no any value exist, returning empty list
+            :return:
+            """
+
+            global available_script_options
+
+            for available_option_name in available_script_options:
+                if option_name == available_option_name:
+                    list_next_item = get_next_value_of_list(argument_list, get_item_index_in_list(argument_list, option_name))
+                    if list_next_item != "":
+                        return [option_name, list_next_item]
+                    else:
+                        return []
+            return []
+
+        def read_arguments(self):
+            """
+            The function is returning hash, which contains all options of the scrip if they are used (as key), and their values
+            :return:
+            """
+
+            grab_script_setup = {}
+
+            for script_argument in self.all_arguments:
+                if "-" in script_argument:
+                    ScriptArguments.check_if_help_option(script_argument)
+                    used_option = self.get_option_name_and_value(script_argument, self.all_arguments)
+                    if get_list_length(used_option) == 2:
+                        if used_option[1][0] != "-":
+                            grab_script_setup[used_option[0]] = used_option[1]
+                else:
+                    continue
+
+            return grab_script_setup
+
+    def main(self):
+        """
+        Main Function of the MsipEse Class
+        :return:
+        """
+
+        script_all_inputs = self.ScriptInputs().read_arguments()
+        print(str(script_all_inputs))
+
 
 def main():
     """
@@ -747,16 +907,22 @@ def main():
     :return:
     """
 
+    user_script_inputs = ScriptArguments().get_user_all_inputs()
+
     evaluation_object = MsipEse()
+    evaluation_object.set_user_script_arguments(user_script_inputs)
+    evaluation_object.main()
+
     property_value_list = evaluation_object.get_script_all_property
     for property_value in property_value_list:
         print(property_value)
+
 
 if __name__ == '__main__':
 
     current_time = time.time()
     current_date_time = datetime.datetime.fromtimestamp(current_time).strftime('%Y-%m-%d %H:%M:%S')
-    print("\n\nSTART TIME:\t" + str(current_date_time))
+    print("\n\nSTART TIME:\t" + str(current_date_time) + "\n\n")
 
     main()
 
