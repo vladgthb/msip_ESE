@@ -3,6 +3,7 @@
 # ------------------Import external library/commands---------------#
 
 from __future__ import print_function
+from abc import ABCMeta, abstractmethod
 import os
 import sys
 from subprocess import Popen
@@ -497,6 +498,35 @@ def create_multiple_directories(path_to_create, directory_list):
 # --------------------------------------------------- #
 
 
+class Data(object):
+    """
+    The metaclass of the MsipEse script
+    """
+
+    __metaclass__ = ABCMeta
+
+    def __init__(self):
+        self.main()
+
+    @abstractmethod
+    def main(self):
+        """
+        The main function of the class
+        :return:
+        """
+
+        pass
+
+
+class SubClass(Data):
+    """
+    The sub class of the Data class
+    """
+
+    def main(self):
+        pass
+
+
 class ScriptArguments:
     """
     The class is grabbing input parameters of the script
@@ -846,12 +876,12 @@ class MsipEse:
         # ------------ Initialase Default Values ------------ #
         # --------------------------------------------------- #
 
-        def __init__(self):
+        def __init__(self, msip_ese_object):
             """
             Project Main Run Class __init__ function
             """
 
-            self.all_arguments = MsipEse.get_user_script_arguments()
+            self.all_arguments = msip_ese_object.get_user_script_arguments
 
         @staticmethod
         def get_option_name_and_value(option_name, argument_list):
@@ -897,7 +927,7 @@ class MsipEse:
         :return:
         """
 
-        script_all_inputs = self.ScriptInputs().read_arguments()
+        script_all_inputs = self.ScriptInputs(self).read_arguments()
         print(str(script_all_inputs))
 
 
