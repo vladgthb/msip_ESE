@@ -47,22 +47,20 @@ ALL FUNCTIONS:
 
 """
 
-
 # --------------------------------------------------- #
 # ---------------- Global Variables ----------------- #
 # --------------------------------------------------- #
 
 
 # The script environment directories list
-environment_directories_name_list = ["LOGS",                # Index[0] Logs directory name
-                                     "REPORTS",             # Index[1] Reports directory name
-                                     "RESULTS",             # Index[2] Results directory name
-                                     "RUN_DIR",             # Index[3] Run directory name
-                                     "SCRIPTS",             # Index[4] Scripts directory name
-                                     "TESTCASES",           # Index[5] Test cases directory name
-                                     "DATA"                 # Index[6] Internal data directory name. DATA/ [PEX_SAMPLE_RUN_SCRIPTS, SAMPLE_OA_LIBRARIES, SIM_SAMPLE_RUN_SCRIPTS]
+environment_directories_name_list = ["LOGS",        # Index[0] Logs directory name
+                                     "REPORTS",     # Index[1] Reports directory name
+                                     "RESULTS",     # Index[2] Results directory name
+                                     "RUN_DIR",     # Index[3] Run directory name
+                                     "SCRIPTS",     # Index[4] Scripts directory name
+                                     "TESTCASES",   # Index[5] Test cases directory name
+                                     "DATA"         # Index[6] Internal data directory name. DATA/ [PEX_SAMPLE_RUN_SCRIPTS, SAMPLE_OA_LIBRARIES, SIM_SAMPLE_RUN_SCRIPTS]
                                      ]
-
 
 # Available Options For the Script
 available_script_options = ["-excelFile",                   # Index[0] Excel file
@@ -71,10 +69,9 @@ available_script_options = ["-excelFile",                   # Index[0] Excel fil
                             "-referenceProjectName",        # Index[3] Reference Project Name
                             "-referenceProjectRelease",     # Index[4] Reference Project Release
                             "-runDirectory",                # Index[5] Script Run Directory
-                            "-executedTestCasePackages"     # Index[6] Executed test case package(s)
+                            "-executedTestCasePackage",     # Index[6] Executed test case package(s)
                             "-projectsRootDirectory"        # Index[7] Projects root directory path
                             ]
-
 
 # Available excel parameters. NOTE!!! If the list value changed please make appropriate change in ReadExcel class for get_* functions
 # Important do not make any change in list order, as the script recognised the values by exact index. If there is need to do modification please update
@@ -199,24 +196,27 @@ def untar_zip_package(zip_file, path_to_extract):
     :return:
     """
 
-    try:
-        tar_file_object = tarfile.open(zip_file)
-    except IOError:
-        exit("ERROR!: Cannot extract .tar.gz file\n\t" + zip_file)
-
-    try:
-        tar_file_members = tar_file_object.getmembers()
-    except tarfile.TarError:
-        exit("ERROR!: Cannot extract .tar.gz file\n\t" + zip_file)
-
-    for member in tar_file_members:
-        member = str(member).split("<TarInfo \'")[1].split("'")[0]
+    if check_for_file_existence(get_file_path(zip_file), get_file_name_from_path(zip_file)):
         try:
-            tar_file_object.extract(member, path=path_to_extract)
-        except tarfile.ExtractError:
+            tar_file_object = tarfile.open(zip_file)
+        except IOError:
             exit("ERROR!: Cannot extract .tar.gz file\n\t" + zip_file)
 
-    tar_file_object.close()
+        try:
+            tar_file_members = tar_file_object.getmembers()
+        except tarfile.TarError:
+            exit("ERROR!: Cannot extract .tar.gz file\n\t" + zip_file)
+
+        for member in tar_file_members:
+            member = str(member).split("<TarInfo \'")[1].split("'")[0]
+            try:
+                tar_file_object.extract(member, path=path_to_extract)
+            except tarfile.ExtractError:
+                exit("ERROR!: Cannot extract .tar.gz file\n\t" + zip_file)
+
+        tar_file_object.close()
+    else:
+        exit("ERROR!:\tCannot find zip file:\t" + str(zip_file))
 
 
 def get_directory_items_list(directory_path):
@@ -598,7 +598,7 @@ class MsipEse:
         Project Main Run Class __init__ function
         """
 
-        # Properties
+        # Environment Properties
 
         # The objects log Name
         self.object_log_name = get_class_name(self)
@@ -608,38 +608,59 @@ class MsipEse:
         self.script_file_base_name = get_file_name_from_path(__file__).replace(".py", "")
 
         # The script execution environment path
-        self.script_environment_path = ""
+        self.script_environment_path = None
         self.set_script_environment_path("/slowfs/us01dwt3p170/msip_ESE")
 
         # The projects root directory
-        self.projects_root_dir = ""
+        self.projects_root_dir = None
         self.set_projects_root_dir("/remote/proj")
 
         # The script Log directory
-        self.script_log_dir = ""
+        self.script_log_dir = None
 
         # The internal data directory
-        self.script_data_directory = ""
+        self.script_data_directory = None
 
         # The reports path directory
-        self.script_reports_directory = ""
+        self.script_reports_directory = None
 
         # The results path directory
-        self.script_results_directory = ""
+        self.script_results_directory = None
 
         # The run path directory
-        self.script_run_directory = ""
+        self.script_run_directory = None
 
         # The scripts path directory
-        self.scripts_files_directory = ""
+        self.scripts_files_directory = None
 
         # The test cases files path directory
-        self.scripts_test_cases_directory = ""
+        self.scripts_test_cases_directory = None
 
         # The user arguments
         self.user_script_inputs = []
 
-        self.set_script_all_property()
+        # Setting all environment properties to default
+        self.set_script_env_property()
+
+        # Project Properties
+
+        # Test case excel file
+        self.excel_file = None
+
+        # Target Project Name
+        self.target_project_name = None
+
+        # Target Project Release
+        self.target_project_release = None
+
+        # Reference Project Name
+        self.reference_project_name = None
+
+        # Reference Project Release
+        self.reference_project_release = None
+
+        # Executed Test Case Package
+        self.executed_test_case_package = None
 
     # --------------------------------------------------- #
     # ----------------- Class Functions ----------------- #
@@ -662,7 +683,7 @@ class MsipEse:
 
         return self.user_script_inputs
 
-    def set_script_all_property(self):
+    def set_script_env_property(self):
         """
         The function is setting all property
         :return:
@@ -677,7 +698,7 @@ class MsipEse:
         self.set_data_directory(os.path.join(self.get_script_environment_path, environment_directories_name_list[6]))
 
     @property
-    def get_script_all_property(self):
+    def get_script_env_property(self):
         """
         The function is returning all properties as a list
         :return:
@@ -863,6 +884,114 @@ class MsipEse:
 
         return self.projects_root_dir
 
+    def set_script_excel_file(self, file_location):
+        """
+        The function is defining projects root directory, by default it is /remote/proj
+        :param file_location:
+        :return:
+        """
+
+        self.excel_file = file_location
+
+    @property
+    def get_script_excel_file(self):
+        """
+        The function is returning reports directory
+        :return:
+        """
+
+        return self.excel_file
+
+    def set_target_project_name(self, value):
+        """
+        The function is defining projects root directory, by default it is /remote/proj
+        :param value:
+        :return:
+        """
+
+        self.target_project_name = value
+
+    @property
+    def get_target_project_name(self):
+        """
+        The function is returning reports directory
+        :return:
+        """
+
+        return self.target_project_name
+
+    def set_target_project_release(self, value):
+        """
+        The function is defining projects root directory, by default it is /remote/proj
+        :param value:
+        :return:
+        """
+
+        self.target_project_release = value
+
+    @property
+    def get_target_project_release(self):
+        """
+        The function is returning reports directory
+        :return:
+        """
+
+        return self.target_project_release
+
+    def set_reference_project_name(self, value):
+        """
+        The function is defining projects root directory, by default it is /remote/proj
+        :param value:
+        :return:
+        """
+
+        self.reference_project_name = value
+
+    @property
+    def get_reference_project_name(self):
+        """
+        The function is returning reports directory
+        :return:
+        """
+
+        return self.reference_project_name
+
+    def set_reference_project_release(self, value):
+        """
+        The function is defining projects root directory, by default it is /remote/proj
+        :param value:
+        :return:
+        """
+
+        self.reference_project_release = value
+
+    @property
+    def get_reference_project_release(self):
+        """
+        The function is returning reports directory
+        :return:
+        """
+
+        return self.reference_project_release
+
+    def set_executed_test_case_package(self, value):
+        """
+        The function is defining projects root directory, by default it is /remote/proj
+        :param value:
+        :return:
+        """
+
+        self.executed_test_case_package = value
+
+    @property
+    def get_executed_test_case_package(self):
+        """
+        The function is returning reports directory
+        :return:
+        """
+
+        return self.executed_test_case_package
+
     # --------------------------------------------------- #
     # ----------------- Internal Class ------------------ #
     # --------------------------------------------------- #
@@ -871,6 +1000,8 @@ class MsipEse:
         """
         The Script Input class, which will check for script input correctness
         """
+
+        global available_script_options
 
         # --------------------------------------------------- #
         # ------------ Initialase Default Values ------------ #
@@ -881,7 +1012,10 @@ class MsipEse:
             Project Main Run Class __init__ function
             """
 
-            self.all_arguments = msip_ese_object.get_user_script_arguments
+            # The MsipEse object's instance
+            self.msip_ese_object = msip_ese_object
+
+            self.all_arguments = self.msip_ese_object.get_user_script_arguments
 
         @staticmethod
         def get_option_name_and_value(option_name, argument_list):
@@ -916,10 +1050,74 @@ class MsipEse:
                     if get_list_length(used_option) == 2:
                         if used_option[1][0] != "-":
                             grab_script_setup[used_option[0]] = used_option[1]
-                else:
-                    continue
 
             return grab_script_setup
+
+        def get_script_arguments(self):
+            """
+            The main function of the ScriptInputs class
+            :return:
+            """
+
+            script_all_inputs_hash = self.read_arguments()
+            all_options_name = script_all_inputs_hash.keys()
+            enable_script_execution = False
+            for option_name in all_options_name:
+                if available_script_options[5] == option_name:
+                    if check_for_dir_existence(get_file_path(script_all_inputs_hash[option_name]), get_file_name_from_path(script_all_inputs_hash[option_name])):
+                        self.msip_ese_object.set_script_environment_path(script_all_inputs_hash[option_name])
+                        self.msip_ese_object.set_script_env_property()
+                    else:
+                        exit("ERROR!:\tThe run directory path is not exist\t'" + str(script_all_inputs_hash[option_name]) + "'\n\tPlease check script arguments")
+                elif available_script_options[0] == option_name:
+                    enable_script_execution = True
+                elif available_script_options[1] == option_name:
+                    enable_script_execution = True
+
+            if not enable_script_execution:
+                print_description(
+                    "ERROR!:\tUser should define at least one of the following options:\n\t\t'" + available_script_options[0] + "'\n\t\t'" + available_script_options[1] + "'\n")
+                return None
+            else:
+                return script_all_inputs_hash
+
+        def set_script_inputs(self, script_inputs_argument_hash):
+            """
+            The function is printing
+            :param script_inputs_argument_hash:
+            :return:
+            """
+
+            script_inputs_all_options = script_inputs_argument_hash.keys()
+
+            print("USER INPUTS:\n")
+
+            # Setting script inputs
+            for script_option_name in script_inputs_all_options:
+                script_option_value = script_inputs_argument_hash[script_option_name]
+                print("\t" + script_option_name + "\t" + script_option_value)
+                if script_option_name == available_script_options[0]:
+                    self.msip_ese_object.set_script_excel_file(script_option_value)
+                elif script_option_name == available_script_options[1]:
+                    self.msip_ese_object.set_target_project_name(script_option_value)
+                elif script_option_name == available_script_options[2]:
+                    self.msip_ese_object.set_target_project_release(script_option_value)
+                elif script_option_name == available_script_options[3]:
+                    self.msip_ese_object.set_reference_project_name(script_option_value)
+                elif script_option_name == available_script_options[4]:
+                    self.msip_ese_object.set_reference_project_release(script_option_value)
+                elif script_option_name == available_script_options[5]:
+                    self.msip_ese_object.set_script_run_directory(script_option_value)
+                elif script_option_name == available_script_options[6]:
+                    self.msip_ese_object.set_executed_test_case_package(script_option_value)
+                elif script_option_name == available_script_options[7]:
+                    self.msip_ese_object.set_projects_root_directory(script_option_value)
+
+            # Opening log files for the script
+            # The script stdout file object
+            self.msip_ese_object.object_stdout_file = open_file_for_writing(self.msip_ese_object.script_log_dir, self.msip_ese_object.object_log_name + ".stdout")
+            # The script stderr file object
+            self.msip_ese_object.object_stderr_file = open_file_for_writing(self.msip_ese_object.script_log_dir, self.msip_ese_object.object_log_name + ".stderr")
 
     def main(self):
         """
@@ -927,8 +1125,9 @@ class MsipEse:
         :return:
         """
 
-        script_all_inputs = self.ScriptInputs(self).read_arguments()
-        print(str(script_all_inputs))
+        script_inputs_instance = self.ScriptInputs(self)
+        script_arguments = script_inputs_instance.get_script_arguments()
+        script_inputs_instance.set_script_inputs(script_arguments)
 
 
 def main():
@@ -943,13 +1142,8 @@ def main():
     evaluation_object.set_user_script_arguments(user_script_inputs)
     evaluation_object.main()
 
-    property_value_list = evaluation_object.get_script_all_property
-    for property_value in property_value_list:
-        print(property_value)
-
 
 if __name__ == '__main__':
-
     current_time = time.time()
     current_date_time = datetime.datetime.fromtimestamp(current_time).strftime('%Y-%m-%d %H:%M:%S')
     print("\n\nSTART TIME:\t" + str(current_date_time) + "\n\n")
