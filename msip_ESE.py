@@ -12,6 +12,8 @@ import tarfile
 import shutil
 import time
 import datetime
+from xlrd import open_workbook as read_excel_module
+from xlrd import XLRDError
 
 __author__ = 'vlad'
 
@@ -151,6 +153,17 @@ def print_description(violated_case):
 
     print("\n\n\t" + str(violated_case) + "\n\n")
     exit(description)
+
+
+def get_current_time():
+    """
+    The function is returning time in string format
+    :return:
+    """
+
+    current_time = time.time()
+    current_date_time = datetime.datetime.fromtimestamp(current_time).strftime('%m/%d %H:%M:%S')
+    return str(current_date_time)
 
 
 def get_latest_release_version(releases_list):
@@ -357,7 +370,7 @@ def print_to_stdout(class_object_name, text_to_print):
     :return:
     """
 
-    print(str(text_to_print), file=class_object_name.object_stdout_file)
+    print(str(get_current_time() + ":\t\t" + str(text_to_print)), file=class_object_name.object_stdout_file)
 
 
 def print_to_stderr(object_name, text_to_print):
@@ -368,7 +381,7 @@ def print_to_stderr(object_name, text_to_print):
     :return:
     """
 
-    print("ERROR!:\t" + str(text_to_print), file=object_name.object_stderr_file)
+    print(str(get_current_time() + ":ERROR!:\t" + str(text_to_print)), file=object_name.object_stderr_file)
     exit("\n\nScript finished with errors 0_o. Please check log files\n\n")
 
 
@@ -481,6 +494,29 @@ def set_number_of_tabs(string_value, max_tabs_number):
     return abs(string_symbols_in_tabs - max_tabs_number)
 
 
+def string_column_decoration(column_one_list, column_two_list, max_tabs_number, begin_tab_number):
+    """
+    The function is printing into
+    :param column_one_list:
+    :param column_two_list:
+    :param max_tabs_number:
+    :param begin_tab_number:
+    :return:
+    """
+
+    final_string = ""
+
+    if get_list_length(column_one_list) <= get_list_length(column_two_list):
+        list_values_count = get_list_length(column_one_list)
+    else:
+        list_values_count = get_list_length(column_two_list)
+    for index_value in range(list_values_count):
+        tabs_string = "\t" * set_number_of_tabs(column_one_list[index_value], max_tabs_number)
+        final_string += str("\t" * begin_tab_number) + column_one_list[index_value] + tabs_string + column_two_list[index_value] + "\n"
+
+    return final_string
+
+
 def create_multiple_directories(path_to_create, directory_list):
     """
     The function is creating multiple directory in the current directory
@@ -588,6 +624,7 @@ class MsipEse:
     """
 
     global environment_directories_name_list
+    global available_excel_options
 
     # --------------------------------------------------- #
     # ------------ Initialase Default Values ------------ #
@@ -602,6 +639,9 @@ class MsipEse:
 
         # The objects log Name
         self.object_log_name = get_class_name(self)
+
+        self.object_stdout_file = None
+        self.object_stderr_file = None
 
         # The script File Name and Basename
         self.script_file_name = get_file_name_from_path(__file__)
@@ -642,6 +682,10 @@ class MsipEse:
         # Setting all environment properties to default
         self.set_script_env_property()
 
+        # Excel Properties
+
+        self.excel_setup = {}
+
         # Project Properties
 
         # Test case excel file
@@ -666,6 +710,32 @@ class MsipEse:
     # ----------------- Class Functions ----------------- #
     # --------------------------------------------------- #
 
+    def get_excel_setup(self):
+        """
+        The function is returning excel setup hash variable
+        :return:
+        """
+
+        return self.excel_setup
+
+    def set_excel_setup(self, excel_object):
+        """
+        The function is setting excel setup
+        :param excel_object:
+        :return:
+        """
+
+        # The excel Setup Initialization
+        for optionName in available_excel_options:
+            self.excel_setup[optionName] = None
+
+        if self.get_script_excel_file is not None:
+            excel_object.set_excel_setup()
+            return True
+        else:
+            print_to_stdout(self, "No any excel file is selected")
+            return False
+
     def set_user_script_arguments(self, user_arguments):
         """
         The function is setting user arguments
@@ -682,6 +752,18 @@ class MsipEse:
         """
 
         return self.user_script_inputs
+
+    def create_script_env_directories(self):
+        """
+        The function is generating
+        :return:
+        """
+
+        directories_list = self.get_script_env_property
+        directories_list.remove(self.get_script_environment_path)
+
+        for directory_path in directories_list:
+            create_directory(self.get_script_environment_path, get_file_name_from_path(directory_path))
 
     def set_script_env_property(self):
         """
@@ -1107,17 +1189,105 @@ class MsipEse:
                 elif script_option_name == available_script_options[4]:
                     self.msip_ese_object.set_reference_project_release(script_option_value)
                 elif script_option_name == available_script_options[5]:
-                    self.msip_ese_object.set_script_run_directory(script_option_value)
+                    self.msip_ese_object.set_script_environment_path(script_option_value)
                 elif script_option_name == available_script_options[6]:
                     self.msip_ese_object.set_executed_test_case_package(script_option_value)
                 elif script_option_name == available_script_options[7]:
                     self.msip_ese_object.set_projects_root_directory(script_option_value)
 
-            # Opening log files for the script
-            # The script stdout file object
-            self.msip_ese_object.object_stdout_file = open_file_for_writing(self.msip_ese_object.script_log_dir, self.msip_ese_object.object_log_name + ".stdout")
-            # The script stderr file object
-            self.msip_ese_object.object_stderr_file = open_file_for_writing(self.msip_ese_object.script_log_dir, self.msip_ese_object.object_log_name + ".stderr")
+    class Excel:
+        """
+        The class is for read and get appropriate information from excel file
+        """
+
+        global available_excel_options
+
+        def __init__(self, msip_ese_object):
+            """
+            Initial function of the class
+            """
+
+            # --------------- Variables --------------- #
+
+            self.msip_ese_object = msip_ese_object
+
+        def check_excel_option_name_and_value(self, excel_option_name, excel_option_value):
+            """
+            The function is checking the option name and value for correctness,
+            and returns None if not correct and added value on appropriate option setup of excel variable self.excelSetup
+            :param excel_option_name:
+            :param excel_option_value:
+            :return: True if found and False if not
+            """
+
+            global available_excel_options
+
+            for optionName in available_excel_options:
+                if excel_option_name.upper() == str(optionName).upper():
+                    if not check_if_string_is_empty(excel_option_value):
+                        self.msip_ese_object.excel_setup[optionName] = excel_option_value
+                        return True
+                    else:
+                        return False
+
+            return False
+
+        def read_excel(self, excel_file):
+            """
+            The function is reading excel file
+            :param excel_file:
+            :return:
+            """
+
+            print_to_stdout(self.msip_ese_object, "Reading excel file\t" + excel_file)
+            try:
+                excel_workbook_object = read_excel_module(excel_file)
+            except XLRDError as xlrdException:
+                print_to_stderr(self.msip_ese_object, "File\t" + excel_file + "\n\t\t" + str(xlrdException))
+
+            # noinspection PyUnboundLocalVariable
+            all_sheets_name = excel_workbook_object.sheet_names()
+
+            for sheet_name in all_sheets_name:
+                work_sheet_object = excel_workbook_object.sheet_by_name(sheet_name)
+                row_number = work_sheet_object.nrows
+                for current_row in range(1, row_number):
+                    excel_option_name = str(work_sheet_object.cell_value(current_row, 1))
+                    excel_option_value = str(work_sheet_object.cell_value(current_row, 2))
+                    excel_option_comment = str(work_sheet_object.cell_value(current_row, 4))
+                    row_contains_information = self.check_excel_option_name_and_value(excel_option_name, excel_option_value)
+                    if row_contains_information and (not check_if_string_is_empty(excel_option_comment)):
+                        print("IMPORTANT NOTE! USER MAKES COMMENT FOR TEST CASE OPTION IN EXCEL FILE\n\tCOMMENT:\t" + excel_option_comment + "\n\tLINE:\t\t" + str(current_row + 1))
+
+        def main(self, excel_file):
+            """
+            Main function of the class
+            :param excel_file:
+            :return:
+            """
+
+            if check_if_string_is_empty(excel_file):
+                print_to_stdout(self.msip_ese_object, "No any excel file selected.\nSkip the step")
+            else:
+                if check_for_file_existence(get_file_path(excel_file), get_file_name_from_path(excel_file)):
+                    self.read_excel(excel_file)
+                else:
+                    print_to_stderr(self.msip_ese_object, "Cannot read excel file\t" + os.path.join(get_file_path(excel_file), excel_file))
+
+            print_to_stdout(self.msip_ese_object, "USER IS SET FOLLOWING EXCEL'S OPTION(S)\n")
+            excel_options = self.msip_ese_object.excel_setup.keys()
+            for option in excel_options:
+                if self.msip_ese_object.excel_setup[option] is not None:
+                    number_of_tabs = "\t" * set_number_of_tabs(option, 5)
+                    print_to_stdout(self.msip_ese_object, str("\t" + option + number_of_tabs + self.msip_ese_object.excel_setup[option]))
+
+            print_to_stdout(self.msip_ese_object, "\n\nFOLLOWING EXCEL'S OPTIONS ARE NOT USED\n")
+            for option in excel_options:
+                if self.msip_ese_object.excel_setup[option] is None:
+                    number_of_tabs = "\t" * set_number_of_tabs(option, 5)
+                    print_to_stdout(self.msip_ese_object, str("\t" + option + number_of_tabs + str(self.msip_ese_object.excel_setup[option])))
+
+            return self
 
     def main(self):
         """
@@ -1128,6 +1298,18 @@ class MsipEse:
         script_inputs_instance = self.ScriptInputs(self)
         script_arguments = script_inputs_instance.get_script_arguments()
         script_inputs_instance.set_script_inputs(script_arguments)
+
+        # Creating environment directories
+
+        self.create_script_env_directories()
+        # Opening log files for the script
+        # The script stdout file object
+        self.object_stdout_file = open_file_for_writing(self.script_log_dir, self.object_log_name + ".stdout")
+        # The script stderr file object
+        self.object_stderr_file = open_file_for_writing(self.script_log_dir, self.object_log_name + ".stderr")
+
+        print_to_stdout(self, "READING SCRIPT ARGUMENTS")
+        print_to_stdout(self, "Script Inputs Is:\n" + string_column_decoration(list(script_arguments.keys()), list(script_arguments.values()), 6, 4))
 
 
 def main():
@@ -1144,13 +1326,10 @@ def main():
 
 
 if __name__ == '__main__':
-    current_time = time.time()
-    current_date_time = datetime.datetime.fromtimestamp(current_time).strftime('%Y-%m-%d %H:%M:%S')
-    print("\n\nSTART TIME:\t" + str(current_date_time) + "\n\n")
+
+    print("\n\nSTART TIME:\t" + get_current_time() + "\n\n")
 
     main()
 
-    current_time = time.time()
-    current_date_time = datetime.datetime.fromtimestamp(current_time).strftime('%Y-%m-%d %H:%M:%S')
-    print("\n\nFINISHED TIME:\t" + str(current_date_time))
+    print("\n\nFINISHED TIME:\t" + get_current_time())
     print("\n\nScript Finished Successfully ^_^\n\n")
