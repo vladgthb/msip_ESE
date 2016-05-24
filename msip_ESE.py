@@ -55,24 +55,24 @@ ALL FUNCTIONS:
 
 
 # The script environment directories list
-environment_directories_name_list = ["LOGS",        # Index[0] Logs directory name
-                                     "REPORTS",     # Index[1] Reports directory name
-                                     "RESULTS",     # Index[2] Results directory name
-                                     "RUN_DIR",     # Index[3] Run directory name
-                                     "SCRIPTS",     # Index[4] Scripts directory name
-                                     "TESTCASES",   # Index[5] Test cases directory name
-                                     "DATA"         # Index[6] Internal data directory name. DATA/ [PEX_SAMPLE_RUN_SCRIPTS, SAMPLE_OA_LIBRARIES, SIM_SAMPLE_RUN_SCRIPTS]
+environment_directories_name_list = ["LOGS",  # Index[0] Logs directory name
+                                     "REPORTS",  # Index[1] Reports directory name
+                                     "RESULTS",  # Index[2] Results directory name
+                                     "RUN_DIR",  # Index[3] Run directory name
+                                     "SCRIPTS",  # Index[4] Scripts directory name
+                                     "TESTCASES",  # Index[5] Test cases directory name
+                                     "DATA"  # Index[6] Internal data directory name. DATA/ [PEX_SAMPLE_RUN_SCRIPTS, SAMPLE_OA_LIBRARIES, SIM_SAMPLE_RUN_SCRIPTS]
                                      ]
 
 # Available Options For the Script
-available_script_options = ["-excelFile",                   # Index[0] Excel file
-                            "-targetProjectName",           # Index[1] Target Project Name
-                            "-targetProjectRelease",        # Index[2] Target Project Release
-                            "-referenceProjectName",        # Index[3] Reference Project Name
-                            "-referenceProjectRelease",     # Index[4] Reference Project Release
-                            "-runDirectory",                # Index[5] Script Run Directory
-                            "-executedTestCasePackage",     # Index[6] Executed test case package(s)
-                            "-projectsRootDirectory"        # Index[7] Projects root directory path
+available_script_options = ["-excelFile",  # Index[0] Excel file
+                            "-targetProjectName",  # Index[1] Target Project Name
+                            "-targetProjectRelease",  # Index[2] Target Project Release
+                            "-referenceProjectName",  # Index[3] Reference Project Name
+                            "-referenceProjectRelease",  # Index[4] Reference Project Release
+                            "-runDirectory",  # Index[5] Script Run Directory
+                            "-executedTestCasePackage",  # Index[6] Executed test case package(s)
+                            "-projectsRootDirectory"  # Index[7] Projects root directory path
                             ]
 
 # Available excel parameters. NOTE!!! If the list value changed please make appropriate change in ReadExcel class for get_* functions
@@ -162,7 +162,7 @@ def get_current_time():
     """
 
     current_time = time.time()
-    current_date_time = datetime.datetime.fromtimestamp(current_time).strftime('%m/%d %H:%M:%S')
+    current_date_time = datetime.datetime.fromtimestamp(current_time).strftime('%m/%d %H:%M')
     return str(current_date_time)
 
 
@@ -240,7 +240,11 @@ def get_directory_items_list(directory_path):
     """
 
     if check_for_dir_existence(get_file_path(directory_path), get_file_name_from_path(directory_path)):
-        return os.listdir(directory_path)
+        try:
+            return os.listdir(directory_path)
+        except PermissionError:
+            print("WARNING!:\tPermission denied. Cannot read information from directory:\t'" + directory_path + "'")
+            return []
     else:
         return []
 
@@ -370,7 +374,10 @@ def print_to_stdout(class_object_name, text_to_print):
     :return:
     """
 
-    print(str(get_current_time() + ":\t\t" + str(text_to_print)), file=class_object_name.object_stdout_file)
+    if "NEW LINE" != str(text_to_print).upper():
+        print(str(get_current_time() + ":\t\t" + str(text_to_print)), file=class_object_name.object_stdout_file)
+    else:
+        print("\n", file=class_object_name.object_stdout_file)
 
 
 def print_to_stderr(object_name, text_to_print):
@@ -511,8 +518,8 @@ def string_column_decoration(column_one_list, column_two_list, max_tabs_number, 
     else:
         list_values_count = get_list_length(column_two_list)
     for index_value in range(list_values_count):
-        tabs_string = "\t" * set_number_of_tabs(column_one_list[index_value], max_tabs_number)
-        final_string += str("\t" * begin_tab_number) + column_one_list[index_value] + tabs_string + column_two_list[index_value] + "\n"
+        tabs_string = "\t" * set_number_of_tabs(str(column_one_list[index_value]), max_tabs_number)
+        final_string += str("\t" * begin_tab_number) + str(column_one_list[index_value]) + tabs_string + str(column_two_list[index_value]) + "\n"
 
     return final_string
 
@@ -685,11 +692,16 @@ class MsipEse:
         # Excel Properties
 
         self.excel_setup = {}
+        # Initialisation of excel_setup hash
+        self.set_excel_setup_none_value()
 
         # Project Properties
 
         # Test case excel file
         self.excel_file = None
+
+        # Target Project Type
+        self.target_project_type = None
 
         # Target Project Name
         self.target_project_name = None
@@ -697,11 +709,20 @@ class MsipEse:
         # Target Project Release
         self.target_project_release = None
 
+        # Target Project Metal Stack List
+        self.target_project_metal_stack_list = []
+
+        # Reference Project Type
+        self.reference_project_type = None
+
         # Reference Project Name
         self.reference_project_name = None
 
         # Reference Project Release
         self.reference_project_release = None
+
+        # Target Reference Metal Stack List
+        self.reference_project_metal_stack_list = []
 
         # Executed Test Case Package
         self.executed_test_case_package = None
@@ -718,23 +739,15 @@ class MsipEse:
 
         return self.excel_setup
 
-    def set_excel_setup(self, excel_object):
+    def set_excel_setup_none_value(self):
         """
         The function is setting excel setup
-        :param excel_object:
         :return:
         """
 
         # The excel Setup Initialization
         for optionName in available_excel_options:
             self.excel_setup[optionName] = None
-
-        if self.get_script_excel_file is not None:
-            excel_object.set_excel_setup()
-            return True
-        else:
-            print_to_stdout(self, "No any excel file is selected")
-            return False
 
     def set_user_script_arguments(self, user_arguments):
         """
@@ -984,6 +997,24 @@ class MsipEse:
 
         return self.excel_file
 
+    def set_target_project_type(self, value):
+        """
+        The function is defining target project type
+        :param value:
+        :return:
+        """
+
+        self.target_project_type = value
+
+    @property
+    def get_target_project_type(self):
+        """
+        The function is defining target project type
+        :return:
+        """
+
+        return self.target_project_type
+
     def set_target_project_name(self, value):
         """
         The function is defining projects root directory, by default it is /remote/proj
@@ -1019,6 +1050,24 @@ class MsipEse:
         """
 
         return self.target_project_release
+
+    def set_reference_project_type(self, value):
+        """
+        The function is defining target project type
+        :param value:
+        :return:
+        """
+
+        self.reference_project_type = value
+
+    @property
+    def get_reference_project_type(self):
+        """
+        The function is defining target project type
+        :return:
+        """
+
+        return self.reference_project_type
 
     def set_reference_project_name(self, value):
         """
@@ -1056,6 +1105,46 @@ class MsipEse:
 
         return self.reference_project_release
 
+    def set_target_project_metal_stack_list(self, list_value):
+        """
+        The function is defining projects root directory, by default it is /remote/proj
+        :param list_value:
+        :return:
+        """
+
+        self.target_project_metal_stack_list = []
+        for value in list_value:
+            self.target_project_metal_stack_list.append(value)
+
+    @property
+    def get_target_project_metal_stack_list(self):
+        """
+        The function is returning reports directory
+        :return:
+        """
+
+        return self.target_project_metal_stack_list
+
+    def set_reference_project_metal_stack_list(self, list_value):
+        """
+        The function is defining projects root directory, by default it is /remote/proj
+        :param list_value:
+        :return:
+        """
+
+        self.reference_project_metal_stack_list = []
+        for value in list_value:
+            self.reference_project_metal_stack_list.append(value)
+
+    @property
+    def get_reference_project_metal_stack_list(self):
+        """
+        The function is returning reports directory
+        :return:
+        """
+
+        return self.reference_project_metal_stack_list
+
     def set_executed_test_case_package(self, value):
         """
         The function is defining projects root directory, by default it is /remote/proj
@@ -1074,9 +1163,160 @@ class MsipEse:
 
         return self.executed_test_case_package
 
+    # The MsipEse class methods
+
     # --------------------------------------------------- #
     # ----------------- Internal Class ------------------ #
     # --------------------------------------------------- #
+
+    class ProjectEnvironment:
+        """
+        The class contains project environment variables and methods to setup environment and do sample extract flow
+        """
+
+        global available_excel_options
+
+        def __init__(self, msip_ese_object):
+            """
+            Initial function of the class
+            :param msip_ese_object:
+            """
+
+            self.msip_ese_object = msip_ese_object
+
+        def setup_target_project_name(self):
+            """
+            The function is returning project name value
+            :return:
+            """
+
+            if self.msip_ese_object.get_target_project_name is not None:
+                print_to_stdout(self.msip_ese_object, "FOUND TARGET PROJECT NAME\t" + str(self.msip_ese_object.get_target_project_name))
+                return None
+            elif self.msip_ese_object.excel_setup[available_excel_options[15]] is not None:
+                self.msip_ese_object.set_target_project_name(self.msip_ese_object.excel_setup[available_excel_options[15]])
+                print_to_stdout(self.msip_ese_object, "FOUND TARGET PROJECT NAME\t" + str(self.msip_ese_object.get_target_project_name))
+            else:
+                print_to_stderr(self.msip_ese_object, "Cannot find target project name. Please check script/excel file inputs")
+
+            return None
+
+        def setup_reference_project_name(self):
+            """
+            The function is returning project name value
+            :return:
+            """
+
+            if self.msip_ese_object.get_reference_project_name is not None:
+                print_to_stdout(self.msip_ese_object, "FOUND REFERENCE PROJECT NAME\t" + str(self.msip_ese_object.get_reference_project_name))
+                return None
+            elif self.msip_ese_object.excel_setup[available_excel_options[17]] is not None:
+                self.msip_ese_object.set_reference_project_name(self.msip_ese_object.excel_setup[available_excel_options[17]])
+                print_to_stdout(self.msip_ese_object, "FOUND REFERENCE PROJECT NAME\t" + str(self.msip_ese_object.get_reference_project_name))
+            else:
+                print_to_stdout(self.msip_ese_object, "Cannot find reference project name. Please check script/excel file inputs")
+
+            return None
+
+        def setup_target_project_release(self):
+            """
+            The function is returning project release value
+            :return:
+            """
+
+            if self.msip_ese_object.get_target_project_release is not None:
+                print_to_stdout(self.msip_ese_object, "FOUND TARGET PROJECT RELEASE\t" + str(self.msip_ese_object.get_target_project_release))
+                return None
+            elif self.msip_ese_object.excel_setup[available_excel_options[16]] is not None:
+                self.msip_ese_object.set_target_project_release(self.msip_ese_object.excel_setup[available_excel_options[16]])
+                print_to_stdout(self.msip_ese_object, "FOUND TARGET PROJECT RELEASE\t" + str(self.msip_ese_object.get_target_project_release))
+            else:
+                print_to_stderr(self.msip_ese_object, "Cannot find target project release. Please check script/excel file inputs")
+
+            return None
+
+        def setup_reference_project_release(self):
+            """
+            The function is returning project release value
+            :return:
+            """
+
+            if self.msip_ese_object.get_reference_project_release is not None:
+                print_to_stdout(self.msip_ese_object, "FOUND REFERENCE PROJECT RELEASE\t" + str(self.msip_ese_object.get_reference_project_release))
+                return None
+            elif self.msip_ese_object.excel_setup[available_excel_options[18]] is not None:
+                self.msip_ese_object.set_reference_project_release(self.msip_ese_object.excel_setup[available_excel_options[18]])
+                print_to_stdout(self.msip_ese_object, "FOUND REFERENCE PROJECT RELEASE\t" + str(self.msip_ese_object.get_reference_project_release))
+            else:
+                print_to_stdout(self.msip_ese_object, "Cannot find reference project name. Please check script/excel file inputs")
+
+            return None
+
+        def find_project_type(self, project_name):
+            """
+            The function is returning project type
+            :param project_name:
+            :return:
+            """
+
+            projects_root_dir = self.msip_ese_object.get_projects_root_dir
+
+            project_all_types = get_directory_items_list(projects_root_dir)
+
+            if project_all_types is not None:
+                for project_type in project_all_types:
+                    available_project_names = get_directory_items_list(os.path.join(projects_root_dir, project_type))
+                    for value in available_project_names:
+                        if project_name == value:
+                            return project_type
+                print_to_stderr(self.msip_ese_object, "Cannot find project '" + project_name + "' project type under directory\t'" + str(projects_root_dir) + "'")
+            else:
+                print_to_stderr(self.msip_ese_object, "Cannot find project '" + project_name + "' project type under directory\t'" + str(projects_root_dir) + "'")
+
+        def setup_target_project_type(self):
+            """
+            The function setup project type
+            :return:
+            """
+
+            if self.msip_ese_object.get_target_project_type is None:
+                if self.msip_ese_object.get_target_project_name is not None:
+                    project_type = str(self.find_project_type(self.msip_ese_object.get_target_project_name))
+                    self.msip_ese_object.set_target_project_type(project_type)
+                    print_to_stdout(self.msip_ese_object, "FOUND TARGET PROJECT TYPE\t" + str(self.msip_ese_object.get_target_project_type))
+                else:
+                    print_to_stderr(self.msip_ese_object, "Target project name is not defined")
+
+        def setup_reference_project_type(self):
+            """
+            The function setup project type
+            :return:
+            """
+
+            if self.msip_ese_object.get_reference_project_type is None:
+                if self.msip_ese_object.get_reference_project_name is not None:
+                    project_type = str(self.find_project_type(self.msip_ese_object.get_reference_project_name))
+                    self.msip_ese_object.set_reference_project_type(project_type)
+                    print_to_stdout(self.msip_ese_object, "FOUND REFERENCE PROJECT TYPE\t" + str(self.msip_ese_object.get_reference_project_type))
+                else:
+                    print_to_stdout(self.msip_ese_object, "Reference project name is not defined")
+
+        def setup_environment(self):
+            """
+            The main function of the Environment setup class
+            :return:
+            """
+
+            print_to_stdout(self.msip_ese_object, "new line")
+            print_to_stdout(self.msip_ese_object, "SEARCHING FOR PROJECT INFO\n")
+
+            self.setup_target_project_name()
+            self.setup_target_project_release()
+            self.setup_target_project_type()
+
+            self.setup_reference_project_name()
+            self.setup_reference_project_release()
+            self.setup_reference_project_type()
 
     class ScriptInputs:
         """
@@ -1239,7 +1479,7 @@ class MsipEse:
             :return:
             """
 
-            print_to_stdout(self.msip_ese_object, "Reading excel file\t" + excel_file)
+            print_to_stdout(self.msip_ese_object, "READING EXCEL FILE:\t'" + excel_file + "'")
             try:
                 excel_workbook_object = read_excel_module(excel_file)
             except XLRDError as xlrdException:
@@ -1257,9 +1497,12 @@ class MsipEse:
                     excel_option_comment = str(work_sheet_object.cell_value(current_row, 4))
                     row_contains_information = self.check_excel_option_name_and_value(excel_option_name, excel_option_value)
                     if row_contains_information and (not check_if_string_is_empty(excel_option_comment)):
-                        print("IMPORTANT NOTE! USER MAKES COMMENT FOR TEST CASE OPTION IN EXCEL FILE\n\tCOMMENT:\t" + excel_option_comment + "\n\tLINE:\t\t" + str(current_row + 1))
+                        str_to_display = "IMPORTANT NOTE! USER MAKES COMMENT FOR TEST CASE OPTION IN EXCEL FILE\n\tCOMMENT:\t" + excel_option_comment + "\n\tLINE:\t\t" + str(
+                            current_row + 1)
+                        print(str_to_display)
+                        print_to_stdout(self.msip_ese_object, str_to_display)
 
-        def main(self, excel_file):
+        def get_information_from_excel_file(self, excel_file):
             """
             Main function of the class
             :param excel_file:
@@ -1274,14 +1517,16 @@ class MsipEse:
                 else:
                     print_to_stderr(self.msip_ese_object, "Cannot read excel file\t" + os.path.join(get_file_path(excel_file), excel_file))
 
-            print_to_stdout(self.msip_ese_object, "USER IS SET FOLLOWING EXCEL'S OPTION(S)\n")
+            print_to_stdout(self.msip_ese_object, "new line")
+            print_to_stdout(self.msip_ese_object, "User is set following excel's option(s)\n")
             excel_options = self.msip_ese_object.excel_setup.keys()
             for option in excel_options:
                 if self.msip_ese_object.excel_setup[option] is not None:
                     number_of_tabs = "\t" * set_number_of_tabs(option, 5)
                     print_to_stdout(self.msip_ese_object, str("\t" + option + number_of_tabs + self.msip_ese_object.excel_setup[option]))
 
-            print_to_stdout(self.msip_ese_object, "\n\nFOLLOWING EXCEL'S OPTIONS ARE NOT USED\n")
+            print_to_stdout(self.msip_ese_object, "new line")
+            print_to_stdout(self.msip_ese_object, "Following excel options are not used\n")
             for option in excel_options:
                 if self.msip_ese_object.excel_setup[option] is None:
                     number_of_tabs = "\t" * set_number_of_tabs(option, 5)
@@ -1309,7 +1554,15 @@ class MsipEse:
         self.object_stderr_file = open_file_for_writing(self.script_log_dir, self.object_log_name + ".stderr")
 
         print_to_stdout(self, "READING SCRIPT ARGUMENTS")
-        print_to_stdout(self, "Script Inputs Is:\n" + string_column_decoration(list(script_arguments.keys()), list(script_arguments.values()), 6, 4))
+        print_to_stdout(self, "Script Inputs Is:\n" + string_column_decoration(list(script_arguments.keys()), list(script_arguments.values()), 5, 4))
+
+        # The initialisation of excel class and reading it
+        script_excel_instance = self.Excel(self)
+        script_excel_instance.get_information_from_excel_file(self.get_script_excel_file)
+
+        # The initialisation of ProjectEnvironment class instance
+        project_environment = self.ProjectEnvironment(self)
+        project_environment.setup_environment()
 
 
 def main():
@@ -1324,9 +1577,10 @@ def main():
     evaluation_object.set_user_script_arguments(user_script_inputs)
     evaluation_object.main()
 
+    print_to_stdout(evaluation_object, string_column_decoration(list(evaluation_object.__dict__.keys()), list(evaluation_object.__dict__.values()), 8, 1))
+
 
 if __name__ == '__main__':
-
     print("\n\nSTART TIME:\t" + get_current_time() + "\n\n")
 
     main()
