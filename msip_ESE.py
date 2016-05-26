@@ -145,6 +145,7 @@ project_extract_file_extension = ".spf"
 project_extract_ideal_file_prefix = "ideal_"
 project_extract_ideal_file_extension = ".raw"
 gds_file_extension = ".gds"
+gds_config_file_extension = ".config"
 tar_file_extension = ".tar.gz"
 
 available_package_directory_tags_list = ["insideTarFile:", "insideTestCasePackagePath:"]
@@ -2148,6 +2149,54 @@ class MsipEse:
 
             return False
 
+        def generate_gds_config_file(self, gds_file, untar_directory_path):
+            """
+            The function is generating gds config file
+            :param gds_file:
+            :param untar_directory_path:
+            :return:
+            """
+
+            gds_file_name = get_file_name_from_path(gds_file)
+
+            print_to_stdout(self.msip_ese_object, "Generating gds config file for GDS:\t'" + gds_file + "'")
+            icwbev_mac_file_content = """layout open GDS_FILE ??
+foreach topLevel [layout root cells] {
+cell open $topLevel
+}
+set gds_info [open "GDS_NAME.config" "w+"]
+puts $gds_info "TOP_CELL_NAME:\t\t\t [cell active]"
+puts $gds_info "ALL_LAYERS:\t\t\t [cell layers -all]"
+close $gds_info
+exit""".replace(".config", gds_config_file_extension).replace("GDS_FILE", gds_file).replace("GDS_NAME", gds_file_name)
+
+            icwb_mac_file_object = open_file_for_writing(untar_directory_path, gds_file_name + ".mac")
+            icwb_mac_file_object.write(icwbev_mac_file_content)
+            icwb_mac_file_object.close()
+
+            shell_command = """#!/bin/bash
+source /remote/cad-rep/etc/.bashrc
+
+export SNPSLMD_LICENSE_FILE=26585@am04-lic3:26585@am04-lic2:26585@de02_lic5:26585@us01snpslmd5:27000@bear
+export LM_LICENSE_FILE=1717@de02-lic5:1717@de02_lic4:26585@am04-lic3:26585@am04-lic2:26585@de02_lic5:26585@us01snpslmd5
+
+cd RUN_DIR
+
+module unload icwbev_plus
+module load icwbev_plus/2015.06
+icwbev -run GDS_NAME.mac -nodisplay\n
+chmod -R 777 *
+""".replace("RUN_DIR", untar_directory_path).replace("GDS_NAME", gds_file_name)
+
+            shell_file_object = open_file_for_writing(untar_directory_path, gds_file_name + "_export_gds_layers.sh")
+            shell_file_object.write(shell_command)
+            shell_file_object.close()
+
+            process = execute_external_command(os.path.join(untar_directory_path, gds_file_name + "_export_gds_layers.sh"))
+            process.wait()
+
+            print_to_stdout(self, "GDS layers are in file\t" + os.path.join(untar_directory_path, gds_file_name + gds_config_file_extension))
+
         def move_file(self, excel_information, source, destination):
             """
             The function is moving
@@ -2166,11 +2215,12 @@ class MsipEse:
 
             print_to_stderr(self.msip_ese_object, "Cannot copy file from:\t'" + source + "'\tTo\t'" + os.path.join(destination, get_file_name_from_path(source)) + "'")
 
-        def move_test_case_files(self, source_directory, destination_directory):
+        def move_test_case_files(self, source_directory, destination_directory, untar_directory_path):
             """
             The function is moving all necessary data of the test case from source path to environment
             :param source_directory:
             :param destination_directory:
+            :param untar_directory_path:
             :return:
             """
 
@@ -2183,7 +2233,9 @@ class MsipEse:
             gds_files_list = self.msip_ese_object.excel_setup[available_excel_options[7]].split(",")
             create_directory(destination_directory, project_test_case_directories_list[1])
             for gds_file in gds_files_list:
+                self.generate_gds_config_file(gds_file, untar_directory_path)
                 self.move_file(gds_file, source_directory, os.path.join(destination_directory, project_test_case_directories_list[1]))
+                self.move_file(gds_file + gds_config_file_extension, untar_directory_path, os.path.join(destination_directory, project_test_case_directories_list[1]))
 
             lvs_files_list = self.msip_ese_object.excel_setup[available_excel_options[8]].split(",")
             create_directory(destination_directory, project_test_case_directories_list[2])
@@ -2207,18 +2259,30 @@ class MsipEse:
                     self.msip_ese_object.disable_force_add_test_case()
 
                 if self.msip_ese_object.get_force_add_test_case_option:
+                    test_case_untar_directory = create_directories_hierarchy(self.msip_ese_object.get_script_run_directory,
+                                                                             [self.msip_ese_object.excel_setup[available_excel_options[0]],
+                                                                              self.msip_ese_object.excel_setup[available_excel_options[3]],
+                                                                              untar_directory_name])
                     if str(self.msip_ese_object.excel_setup[available_excel_options[5]]).endswith(tar_file_extension):
-                        test_case_untar_directory = create_directories_hierarchy(self.msip_ese_object.get_script_run_directory,
-                                                                                 [self.msip_ese_object.excel_setup[available_excel_options[0]],
-                                                                                  self.msip_ese_object.excel_setup[available_excel_options[3]],
-                                                                                  untar_directory_name])
                         untar_zip_package(self.msip_ese_object.excel_setup[available_excel_options[5]], test_case_untar_directory)
                         source_directory_path = test_case_untar_directory
                     else:
                         source_directory_path = str(self.msip_ese_object.excel_setup[available_excel_options[5]])
 
                     if check_for_dir_existence(get_file_path(source_directory_path), get_file_name_from_path(source_directory_path)):
-                        self.move_test_case_files(source_directory_path, test_case_directory)
+                        self.move_test_case_files(source_directory_path, test_case_directory, test_case_untar_directory)
+
+    class Extract:
+        """
+        The Extract class
+        """
+
+        def __init__(self, msip_ese_object):
+            """
+            Initialisation of the class
+            """
+
+            self.msip_ese_object = msip_ese_object
 
     def main(self):
         """
@@ -2229,6 +2293,8 @@ class MsipEse:
         script_inputs_instance = self.ScriptInputs(self)
         script_arguments = script_inputs_instance.get_script_arguments()
         script_inputs_instance.set_script_inputs(script_arguments)
+
+        print("\nPROCESSING ...\n")
 
         # Creating environment directories
 
@@ -2259,6 +2325,8 @@ class MsipEse:
         # Updating test cases
         test_cases = self.TestCases(self)
         test_cases.update_test_cases()
+
+        # Do extraction
 
 
 def main():
