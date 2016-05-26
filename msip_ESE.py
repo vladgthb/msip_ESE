@@ -72,7 +72,8 @@ available_script_options = ["-excelFile",  # Index[0] Excel file
                             "-referenceProjectRelease",  # Index[4] Reference Project Release
                             "-runDirectory",  # Index[5] Script Run Directory
                             "-executedTestCasePackage",  # Index[6] Executed test case package(s)
-                            "-projectsRootDirectory"  # Index[7] Projects root directory path
+                            "-projectsRootDirectory",  # Index[7] Projects root directory path
+                            "-forceUpdateTestCase"     # Index[8] Force Updating Test Case Package
                             ]
 
 # Available excel parameters. NOTE!!! If the list value changed please make appropriate change in ReadExcel class for get_* functions
@@ -119,6 +120,10 @@ available_excel_options = ["Test Case Name",
                            "Reference Simulation Tool Version",
                            "Other Comments"]
 
+# Test Case Directory Structure
+project_test_case_directories_list = ["EXCEL", "GDS", "LVS_NETLIST", "TEST_BENCH"]
+untar_directory_name = "UNTAR"
+
 # The project environment file/directories name
 project_environment_file_name = "env.tcl"
 project_cad_directory_name = "cad"
@@ -128,7 +133,7 @@ project_sample_oa_library_names_list = ["SampleLibrary"]
 project_sample_oa_cell_name = "SampleExtract"
 project_sample_runscript_file_name = "sample_runscript.sh"
 project_sample_runscript_location_dir_name = "SAMPLE_RUNSCRIPT_FILES"
-available_project_tools_name = ["ICV",          # INDEX 0 Default value
+available_project_tools_name = ["ICV",  # INDEX 0 Default value
                                 "HERCULES",
                                 "CALIBRE"]
 
@@ -139,6 +144,10 @@ project_lvs_report_extensions = {available_project_tools_name[0]: ".LVS_ERRORS",
 project_extract_file_extension = ".spf"
 project_extract_ideal_file_prefix = "ideal_"
 project_extract_ideal_file_extension = ".raw"
+gds_file_extension = ".gds"
+tar_file_extension = ".tar.gz"
+
+available_package_directory_tags_list = ["insideTarFile:", "insideTestCasePackagePath:"]
 
 
 # --------------------------------------------------- #
@@ -391,7 +400,10 @@ def get_file_path(full_path_to_the_file):
     :return:
     """
 
-    return os.path.dirname(os.path.abspath(full_path_to_the_file))
+    try:
+        return os.path.dirname(os.path.abspath(full_path_to_the_file))
+    except IOError:
+        exit("ERROR!:\tCannot find file\t'" + full_path_to_the_file + "'")
 
 
 def get_file_name_from_path(full_path_to_the_file):
@@ -401,7 +413,10 @@ def get_file_name_from_path(full_path_to_the_file):
     :return:
     """
 
-    return str(os.path.basename(full_path_to_the_file))
+    try:
+        return str(os.path.basename(full_path_to_the_file))
+    except IOError:
+        exit("ERROR!:\tCannot find file\t'" + full_path_to_the_file + "'")
 
 
 def print_to_stdout(class_object_name, text_to_print):
@@ -789,9 +804,37 @@ class MsipEse:
         self.reference_project_pex_tool_name = None
         self.set_reference_project_pex_tool_name(None)
 
+        # Force adding test case enable
+        self.force_add_test_case = False
+
     # --------------------------------------------------- #
     # ----------------- Class Functions ----------------- #
     # --------------------------------------------------- #
+
+    def enable_force_add_test_case(self):
+        """
+        The function is enabling force adding test case enable option
+        :return:
+        """
+
+        self.force_add_test_case = True
+
+    def disable_force_add_test_case(self):
+        """
+        The function is disabling force adding test case enable option
+        :return:
+        """
+
+        self.force_add_test_case = False
+
+    @property
+    def get_force_add_test_case_option(self):
+        """
+        The function is returning force adding test case option
+        :return:
+        """
+
+        return self.force_add_test_case
 
     def set_target_project_pex_tool_name(self, value):
         """
@@ -829,7 +872,7 @@ class MsipEse:
                 self.reference_project_pex_tool_name = available_project_tools_name[0]
 
     @property
-    def get_target_project_pex_tool_name(self):
+    def get_reference_project_pex_tool_name(self):
         """
         The function is returning target project pex tool name
         :return:
@@ -1621,7 +1664,8 @@ class MsipEse:
                 create_directory(run_dir, sample_library_name)
                 target_dir = os.path.join(run_dir, sample_library_name)
                 print_to_stdout(self.msip_ese_object, "GENERATING SAMPLE LIBRARY EXTRACTION FOR METAL STACK:\t" + str(metal_stack))
-                untar_zip_package(os.path.join(self.msip_ese_object.get_data_directory, project_sample_oa_library_directory_name, sample_library_name + ".tar.gz"), target_dir)
+                untar_zip_package(os.path.join(self.msip_ese_object.get_data_directory, project_sample_oa_library_directory_name, sample_library_name + tar_file_extension),
+                                  target_dir)
                 process = self.generate_sample_environment(pex_tool_name, sample_library_name, project_type, project_name, project_release, metal_stack, target_dir, target_dir)
                 process.wait()
                 print_to_stdout(self.msip_ese_object, "\nEnvironment executed successfully\n")
@@ -1953,6 +1997,8 @@ class MsipEse:
                     self.msip_ese_object.set_executed_test_case_package(script_option_value)
                 elif script_option_name == available_script_options[7]:
                     self.msip_ese_object.set_projects_root_directory(script_option_value)
+                elif script_option_name == available_script_options[8]:
+                    self.msip_ese_object.enable_force_add_test_case()
 
     class Excel:
         """
@@ -2051,10 +2097,128 @@ class MsipEse:
                     number_of_tabs = "\t" * set_number_of_tabs(option, 5)
                     print_to_stdout(self.msip_ese_object, str("\t" + option + number_of_tabs + str(self.msip_ese_object.excel_setup[option])))
 
+            # Setting target and reference lvs/pex tool name, by default it is ICV
+
             self.msip_ese_object.set_target_project_pex_tool_name(self.msip_ese_object.excel_setup[available_excel_options[21]])
             self.msip_ese_object.set_reference_project_pex_tool_name(self.msip_ese_object.excel_setup[available_excel_options[23]])
 
+            # Checking if correct test case path
+
+            test_case_path = self.msip_ese_object.excel_setup[available_excel_options[5]]
+            if test_case_path is not None:
+                if get_string_length(test_case_path) > 0:
+                    if not check_for_file_existence(get_file_path(test_case_path), get_file_name_from_path(test_case_path)):
+                        if not check_for_dir_existence(get_file_path(test_case_path), get_file_name_from_path(test_case_path)):
+                            print_to_stdout(self.msip_ese_object, "WARNING!!:\tWrong file/directory for '{0}' excel option".format(available_excel_options[5]))
+                else:
+                    print_to_stdout(self.msip_ese_object, "WARNING!!:\tEmpty value for '{0}' excel option".format(available_excel_options[5]))
             return self
+
+    class TestCases:
+        """
+        The class of test cases updates
+        """
+
+        def __init__(self, msip_ese_object):
+            self.msip_ese_object = msip_ese_object
+
+        def check_for_excel_file_required_information(self):
+            """
+            The function is checking for
+            :return:
+            """
+
+            for required_options_index in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16]:
+                if self.msip_ese_object.excel_setup[available_excel_options[required_options_index]] is None:
+                    print_to_stderr(self.msip_ese_object,
+                                    "Required field in excel file is empty:\t'" + str(available_excel_options[required_options_index]) + "'")
+
+        def check_for_test_case_existence(self, path_to_test_case):
+            """
+            The function is returning the test case
+            :return:
+            """
+
+            if not self.msip_ese_object.get_force_add_test_case_option:
+                if check_for_dir_existence(path_to_test_case, project_test_case_directories_list[1]):
+                    all_files = get_directory_items_list(os.path.join(path_to_test_case, project_test_case_directories_list[1]))
+                    for file_name in all_files:
+                        if file_name.endswith(gds_file_extension):
+                            return True
+
+            return False
+
+        def move_file(self, excel_information, source, destination):
+            """
+            The function is moving
+            :param source:
+            :param excel_information:
+            :param destination:
+            :return:
+            """
+
+            excel_information = str(excel_information).replace(available_package_directory_tags_list[0], "").replace(available_package_directory_tags_list[1], "")
+            source = os.path.join(source, excel_information)
+            if check_for_file_existence(get_file_path(source), get_file_name_from_path(source)):
+                if check_for_dir_existence(get_file_path(destination), get_file_name_from_path(destination)):
+                    shutil.copy(source, os.path.join(destination, get_file_name_from_path(source)))
+                    return
+
+            print_to_stderr(self.msip_ese_object, "Cannot copy file from:\t'" + source + "'\tTo\t'" + os.path.join(destination, get_file_name_from_path(source)) + "'")
+
+        def move_test_case_files(self, source_directory, destination_directory):
+            """
+            The function is moving all necessary data of the test case from source path to environment
+            :param source_directory:
+            :param destination_directory:
+            :return:
+            """
+
+            # Moving test bench files
+            create_directory(destination_directory, project_test_case_directories_list[3])
+            self.move_file(self.msip_ese_object.excel_setup[available_excel_options[6]], source_directory, os.path.join(destination_directory,
+                                                                                                                        project_test_case_directories_list[3]))
+
+            # Moving LVS and GDS Files
+            gds_files_list = self.msip_ese_object.excel_setup[available_excel_options[7]].split(",")
+            create_directory(destination_directory, project_test_case_directories_list[1])
+            for gds_file in gds_files_list:
+                self.move_file(gds_file, source_directory, os.path.join(destination_directory, project_test_case_directories_list[1]))
+
+            lvs_files_list = self.msip_ese_object.excel_setup[available_excel_options[8]].split(",")
+            create_directory(destination_directory, project_test_case_directories_list[2])
+            for lvs_file in lvs_files_list:
+                self.move_file(lvs_file, source_directory, os.path.join(destination_directory, project_test_case_directories_list[2]))
+
+        def update_test_cases(self):
+            """
+            The main function of TestCase class
+            """
+
+            if self.msip_ese_object.get_script_excel_file is not None:
+                self.check_for_excel_file_required_information()
+                print_to_stdout(self.msip_ese_object, "UPDATING TEST CASES STEP")
+                test_case_directory = create_directories_hierarchy(self.msip_ese_object.get_test_cases_directory, [self.msip_ese_object.excel_setup[available_excel_options[0]],
+                                                                                                                   self.msip_ese_object.excel_setup[available_excel_options[3]]])
+
+                if not self.check_for_test_case_existence(test_case_directory):
+                    self.msip_ese_object.enable_force_add_test_case()
+                else:
+                    self.msip_ese_object.disable_force_add_test_case()
+
+                if self.msip_ese_object.get_force_add_test_case_option:
+                    if str(self.msip_ese_object.excel_setup[available_excel_options[5]]).endswith(tar_file_extension):
+                        test_case_untar_directory = create_directories_hierarchy(self.msip_ese_object.get_script_run_directory,
+                                                                                 [self.msip_ese_object.excel_setup[available_excel_options[0]],
+                                                                                  self.msip_ese_object.excel_setup[available_excel_options[3]],
+                                                                                  untar_directory_name])
+                        untar_zip_package(self.msip_ese_object.excel_setup[available_excel_options[5]], test_case_untar_directory)
+                        source_directory_path = test_case_untar_directory
+                    else:
+                        source_directory_path = str(self.msip_ese_object.excel_setup[available_excel_options[5]])
+
+                    if check_for_dir_existence(get_file_path(source_directory_path), get_file_name_from_path(source_directory_path)):
+                        self.move_test_case_files(source_directory_path, test_case_directory)
 
     def main(self):
         """
@@ -2091,6 +2255,10 @@ class MsipEse:
 
         # Grabbing and updating in the script environment the sample runscript files
         project_environment.grab_all_sample_run_scripts()
+
+        # Updating test cases
+        test_cases = self.TestCases(self)
+        test_cases.update_test_cases()
 
 
 def main():
