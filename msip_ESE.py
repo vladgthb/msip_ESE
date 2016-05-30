@@ -73,7 +73,7 @@ available_script_options = ["-excelFile",  # Index[0] Excel file
                             "-runDirectory",  # Index[5] Script Run Directory
                             "-executedTestCasePackage",  # Index[6] Executed test case package(s)
                             "-projectsRootDirectory",  # Index[7] Projects root directory path
-                            "-forceUpdateTestCase"     # Index[8] Force Updating Test Case Package
+                            "-forceUpdateTestCase"  # Index[8] Force Updating Test Case Package
                             ]
 
 # Available excel parameters. NOTE!!! If the list value changed please make appropriate change in ReadExcel class for get_* functions
@@ -145,6 +145,7 @@ project_extract_file_extension = ".spf"
 project_extract_ideal_file_prefix = "ideal_"
 project_extract_ideal_file_extension = ".raw"
 gds_file_extension = ".gds"
+netlist_file_extension = [".cdl", ".sp", ".cir"]
 gds_config_file_extension = ".config"
 tar_file_extension = ".tar.gz"
 
@@ -797,6 +798,9 @@ class MsipEse:
         # Executed Test Case Package
         self.executed_test_case_package = None
 
+        # The test cases hash. Key = test case name, Value = test case path
+        self.project_test_cases = {}
+
         # Target PEX Tool name
         self.target_project_pex_tool_name = None
         self.set_target_project_pex_tool_name(None)
@@ -847,8 +851,11 @@ class MsipEse:
         for tool_name in available_project_tools_name:
             if str(value).upper() == tool_name:
                 self.target_project_pex_tool_name = tool_name
+                return
             else:
                 self.target_project_pex_tool_name = available_project_tools_name[0]
+
+        return
 
     @property
     def get_target_project_pex_tool_name(self):
@@ -1295,6 +1302,24 @@ class MsipEse:
 
         return self.reference_project_metal_stack_list
 
+    def set_project_test_cases(self, hash_value):
+        """
+        The project is setting project_test_cases hash
+        :param hash_value:
+        :return:
+        """
+
+        self.project_test_cases = hash_value
+
+    @property
+    def get_project_test_cases(self):
+        """
+        The function is returning project_test_cases
+        :return:
+        """
+
+        return self.project_test_cases
+
     def set_executed_test_case_package(self, value):
         """
         The function is defining projects root directory, by default it is /remote/proj
@@ -1537,22 +1562,22 @@ class MsipEse:
 
             ude_command = """#!/bin/bash --norc
 
-        VERIFICATION_PATH={0}
-        source /remote/cad-rep/etc/.bashrc
+VERIFICATION_PATH={0}
+source /remote/cad-rep/etc/.bashrc
 
-        module unload msip_cd_pv
-        module load msip_cd_pv/{1}
+module unload msip_cd_pv
+module load msip_cd_pv/{1}
 
-        ude \\
-            --projectType {2} \\
-            --projectName {3} \\
-            --releaseName {4} \\
-            --metalStack  {5} \\
-            --nograph \\
-            --sourceShellFile {0}/sourceme \\
-            -- log            {0}/cdesigner.log \\
-            --command "source {0}/command.tcl"
-        """.format(run_directory, "2016.02", project_type, project_name, project_release, project_metal_stack)
+ude \\
+    --projectType {2} \\
+    --projectName {3} \\
+    --releaseName {4} \\
+    --metalStack  {5} \\
+    --nograph \\
+    --sourceShellFile {0}/sourceme \\
+    -- log            {0}/cdesigner.log \\
+    --command "source {0}/command.tcl"
+""".format(run_directory, "2016.02", project_type, project_name, project_release, project_metal_stack)
 
             return ude_command
 
@@ -1582,11 +1607,11 @@ class MsipEse:
             """
 
             config_command = """#set rcxtTypes "1 1 1 1 1 1 1 1"
-        #set cornerVal "SigCmax SigCmin SigRCmax SigRCmin SigCmaxDP_ErPlus SigCminDP_ErMinus SigRCmaxDP_ErPlus SigRCminDP_ErMinus FuncCmax FuncCmin FuncRCmax FuncRCmin'
-        #FuncCmaxDP_ErPlus FuncCminDP_ErMinus FuncRCmaxDP_
-        #set extractedNetlistPProcessor "0"
-        set rundir "{0}"
-        set outDir "{1}" \n""".format(run_directory, output_directory)
+#set cornerVal "SigCmax SigCmin SigRCmax SigRCmin SigCmaxDP_ErPlus SigCminDP_ErMinus SigRCmaxDP_ErPlus SigRCminDP_ErMinus FuncCmax FuncCmin FuncRCmax FuncRCmin'
+#FuncCmaxDP_ErPlus FuncCminDP_ErMinus FuncRCmaxDP_
+#set extractedNetlistPProcessor "0"
+set rundir "{0}"
+set outDir "{1}" \n""".format(run_directory, output_directory)
 
             return config_command
 
@@ -1667,7 +1692,8 @@ class MsipEse:
                 print_to_stdout(self.msip_ese_object, "GENERATING SAMPLE LIBRARY EXTRACTION FOR METAL STACK:\t" + str(metal_stack))
                 untar_zip_package(os.path.join(self.msip_ese_object.get_data_directory, project_sample_oa_library_directory_name, sample_library_name + tar_file_extension),
                                   target_dir)
-                process = self.generate_sample_environment(pex_tool_name, sample_library_name, project_type, project_name, project_release, metal_stack, target_dir, target_dir)
+                process = self.generate_sample_environment(str(pex_tool_name).lower(), sample_library_name, project_type, project_name, project_release, metal_stack, target_dir,
+                                                           target_dir)
                 process.wait()
                 print_to_stdout(self.msip_ese_object, "\nEnvironment executed successfully\n")
 
@@ -1762,8 +1788,7 @@ class MsipEse:
             print_to_stdout(self.msip_ese_object, "Warning!!: No any sample file found")
             return None
 
-        @staticmethod
-        def update_environment_sample_runscript_files(file_item, path_to_place, script_run_directory, project_type, project_name, project_release, metal_stack):
+        def update_environment_sample_runscript_files(self, file_item, path_to_place, script_run_directory, project_type, project_name, project_release, metal_stack):
             """
             The function is updating sample run script file in the environment
             :param file_item:
@@ -1781,9 +1806,11 @@ class MsipEse:
             file_name = get_file_name_from_path(file_item)
 
             if file_name is not None:
+                netlist_file_name = ""
                 file_object = open_file_for_reading(get_file_path(file_item), file_name)
                 target_sample_command_file_object = open_file_for_writing(path_to_place, file_name)
                 for line in file_object.readlines():
+                    line = str(line.split(">")[0])
                     enable_writing = True
                     for unneeded_line in unneeded_line_list:
                         if str(unneeded_line).upper() in line.upper():
@@ -1792,16 +1819,22 @@ class MsipEse:
                     if enable_writing:
                         if "export METAL_STACK" in line:
                             target_sample_command_file_object.writelines(
-                                line + "export RUN_DIR=RUNNING_DIRECTORY;\nexport TOP_CELL_NAME=TOP_CELL_NAME;\nexport GDS_NAME=GDS_NAME;\n")
+                                line + "export RUN_DIR=RUNNING_DIRECTORY;\nexport TOP_CELL_NAME=TOP_CELL_NAME;\nexport GDS_NAME=GDS_NAME;\nexport LVS_NETLIST=LVS_NETLIST;\n")
                         else:
                             line_for_writing = str(line).replace(get_file_path(file_item), "$RUN_DIR")
+                            if ("nettran" in line) and (".cdl" in line):
+                                try:
+                                    netlist_file_name = line_for_writing.split(".cdl")[0].split("/")[1]
+                                except IndexError:
+                                    print_to_stderr(self.msip_ese_object, "Cannot find lvs netlist name from runscript file:\t" + str(get_file_path(file_item), file_name))
+                            if get_string_length(netlist_file_name) > 0:
+                                line_for_writing = line_for_writing.replace(netlist_file_name, "$LVS_NETLIST")
+                            latest_dir_name = str(get_file_path(file_item).split("/")[-1])
+                            line_for_writing = line_for_writing.replace(get_file_path(file_item).replace(latest_dir_name, ""), "$RUN_DIR/")
                             line_for_writing = line_for_writing.replace(os.path.join(script_run_directory, project_type, project_name, project_release, metal_stack), "$RUN_DIR")
                             line_for_writing = line_for_writing.replace("SampleExtract", "$TOP_CELL_NAME")
                             line_for_writing = line_for_writing.replace(".gds.gz", ".gds").replace("$TOP_CELL_NAME.gds", "$GDS_NAME")
-                            if ("nettran_legacy" in line) and (".cdl" in line):
-                                target_sample_command_file_object.writelines(line_for_writing.replace(line_for_writing.split(".cdl")[0].split("/")[1], "$TOP_CELL_NAME"))
-                            else:
-                                target_sample_command_file_object.writelines(line_for_writing)
+                            target_sample_command_file_object.writelines(line_for_writing.replace("/STAR_rcc_typical", ""))
 
         def grab_all_sample_run_scripts(self):
             """
@@ -1835,6 +1868,9 @@ class MsipEse:
                             all_target_sample_runscript_files[metal_stack] = None
                     else:
                         all_target_sample_runscript_files[metal_stack] = None
+                else:
+                    print_to_stderr(self.msip_ese_object, "Something wrong with sample cell extraction step\n\t\t"
+                                                          "No LVS result or SPF file exist. Please check\n\t\t'" + str(target_path) + "'")
 
             for metal_stack in all_reference_metal_stack:
                 reference_path = os.path.join(self.msip_ese_object.get_script_run_directory,
@@ -1853,6 +1889,9 @@ class MsipEse:
                             all_reference_sample_runscript_files[metal_stack] = None
                     else:
                         all_reference_sample_runscript_files[metal_stack] = None
+                else:
+                    print_to_stderr(self.msip_ese_object, "Something wrong with sample cell extraction step\n\t\t"
+                                                          "No LVS result or SPF file exist. Please check\n\t\t'" + str(reference_path) + "'")
 
             for metal_stack in all_target_metal_stack:
                 destination_path = create_directories_hierarchy(self.msip_ese_object.get_data_directory, [project_sample_runscript_location_dir_name,
@@ -2149,11 +2188,12 @@ class MsipEse:
 
             return False
 
-        def generate_gds_config_file(self, gds_file, untar_directory_path):
+        def generate_gds_config_file(self, gds_file, untar_directory_path, target_dir):
             """
             The function is generating gds config file
             :param gds_file:
             :param untar_directory_path:
+            :param target_dir:
             :return:
             """
 
@@ -2164,11 +2204,11 @@ class MsipEse:
 foreach topLevel [layout root cells] {
 cell open $topLevel
 }
-set gds_info [open "GDS_NAME.config" "w+"]
+set gds_info [open "TARGET_DIR/GDS_NAME.config" "w+"]
 puts $gds_info "TOP_CELL_NAME:\t\t\t [cell active]"
 puts $gds_info "ALL_LAYERS:\t\t\t [cell layers -all]"
 close $gds_info
-exit""".replace(".config", gds_config_file_extension).replace("GDS_FILE", gds_file).replace("GDS_NAME", gds_file_name)
+exit""".replace(".config", gds_config_file_extension).replace("GDS_FILE", gds_file).replace("GDS_NAME", gds_file_name).replace("TARGET_DIR", target_dir)
 
             icwb_mac_file_object = open_file_for_writing(untar_directory_path, gds_file_name + ".mac")
             icwb_mac_file_object.write(icwbev_mac_file_content)
@@ -2195,7 +2235,7 @@ chmod -R 777 *
             process = execute_external_command(os.path.join(untar_directory_path, gds_file_name + "_export_gds_layers.sh"))
             process.wait()
 
-            print_to_stdout(self, "GDS layers are in file\t" + os.path.join(untar_directory_path, gds_file_name + gds_config_file_extension))
+            print_to_stdout(self.msip_ese_object, "GDS layers are in file\t" + os.path.join(untar_directory_path, gds_file_name + gds_config_file_extension))
 
         def move_file(self, excel_information, source, destination):
             """
@@ -2211,9 +2251,26 @@ chmod -R 777 *
             if check_for_file_existence(get_file_path(source), get_file_name_from_path(source)):
                 if check_for_dir_existence(get_file_path(destination), get_file_name_from_path(destination)):
                     shutil.copy(source, os.path.join(destination, get_file_name_from_path(source)))
-                    return
+                    try:
+                        os.chmod(os.path.join(destination, get_file_name_from_path(source)), mode=0o777)
+                    except OSError:
+                        print_to_stdout(self.msip_ese_object, "Permission denied\t" + os.path.join(destination, get_file_name_from_path(source)))
+                    return os.path.join(destination, get_file_name_from_path(source))
 
             print_to_stderr(self.msip_ese_object, "Cannot copy file from:\t'" + source + "'\tTo\t'" + os.path.join(destination, get_file_name_from_path(source)) + "'")
+
+        def check_config_file_existence(self, target_gds_file):
+            """
+            The function is checking for config file correctness
+            :param target_gds_file:
+            :return:
+            """
+
+            if check_for_file_existence(get_file_path(target_gds_file), get_file_name_from_path(target_gds_file) + gds_config_file_extension):
+                if get_file_size(os.path.join(get_file_path(target_gds_file), get_file_name_from_path(target_gds_file) + gds_config_file_extension)) > 0:
+                    return
+
+            print_to_stderr(self.msip_ese_object, "Cannot find gds config file for:\t" + target_gds_file)
 
         def move_test_case_files(self, source_directory, destination_directory, untar_directory_path):
             """
@@ -2233,9 +2290,9 @@ chmod -R 777 *
             gds_files_list = self.msip_ese_object.excel_setup[available_excel_options[7]].split(",")
             create_directory(destination_directory, project_test_case_directories_list[1])
             for gds_file in gds_files_list:
-                self.generate_gds_config_file(gds_file, untar_directory_path)
-                self.move_file(gds_file, source_directory, os.path.join(destination_directory, project_test_case_directories_list[1]))
-                self.move_file(gds_file + gds_config_file_extension, untar_directory_path, os.path.join(destination_directory, project_test_case_directories_list[1]))
+                gds_target_file = self.move_file(gds_file, source_directory, os.path.join(destination_directory, project_test_case_directories_list[1]))
+                self.generate_gds_config_file(gds_target_file, untar_directory_path, get_file_path(gds_target_file))
+                self.check_config_file_existence(gds_target_file)
 
             lvs_files_list = self.msip_ese_object.excel_setup[available_excel_options[8]].split(",")
             create_directory(destination_directory, project_test_case_directories_list[2])
@@ -2277,12 +2334,195 @@ chmod -R 777 *
         The Extract class
         """
 
+        global project_sample_runscript_location_dir_name
+
         def __init__(self, msip_ese_object):
             """
             Initialisation of the class
             """
 
             self.msip_ese_object = msip_ese_object
+
+        def get_test_cases(self):
+            """
+            The function is returning hash with test case packages
+            :return:
+            """
+
+            test_cases_hash = {}
+
+            project_name = self.msip_ese_object.get_reference_project_name
+            if project_name is None:
+                project_name = self.msip_ese_object.get_target_project_name
+
+            if self.msip_ese_object.get_executed_test_case_package is None:
+                all_available_test_cases = get_directory_items_list(self.msip_ese_object.get_test_cases_directory)
+                for test_case_name in all_available_test_cases:
+                    test_case_directory = os.path.join(self.msip_ese_object.get_test_cases_directory, test_case_name, project_name)
+                    if check_for_dir_existence(test_case_directory, project_test_case_directories_list[1]):
+                        all_directory_items = get_directory_items_list(os.path.join(test_case_directory, project_test_case_directories_list[1]))
+                        for file_name in all_directory_items:
+                            if file_name.endswith(gds_file_extension):
+                                test_cases_hash[test_case_name] = test_case_directory
+            else:
+                test_case_path = self.msip_ese_object.get_executed_test_case_package
+                if project_name in test_case_path:
+                    try:
+                        test_case_name = test_case_path.split("/")[-2]
+                    except IndexError:
+                        print_to_stderr(self.msip_ese_object, "Cannot find test case name from path\t" + str(test_case_path))
+                else:
+                    try:
+                        test_case_name = test_case_path.split("/")[-1]
+                    except IndexError:
+                        print_to_stderr(self.msip_ese_object, "Cannot find test case name from path\t" + str(test_case_path))
+
+                # noinspection PyUnboundLocalVariable
+                test_cases_hash[test_case_name] = test_case_path
+
+            self.msip_ese_object.set_project_test_cases(test_cases_hash)
+
+        def create_sample_runscript(self, extract_run_directory, test_case_path, file_name, top_cell_name, sample_file_directory):
+            """
+            The function is generating environment for execution extract
+            :param extract_run_directory:
+            :param test_case_path:
+            :param top_cell_name:
+            :param file_name:
+            :param sample_file_directory:
+            :return:
+            """
+
+            file_base_name = get_file_name_from_path(file_name).replace(gds_file_extension, "")
+
+            try:
+                os.symlink(os.path.join(test_case_path, project_test_case_directories_list[1], file_name), os.path.join(extract_run_directory, file_name))
+            except FileExistsError:
+                print_to_stdout(self.msip_ese_object, "Link files already exist:\t" + os.path.join(extract_run_directory, file_name))
+
+            for extension in netlist_file_extension:
+                if check_for_file_existence(os.path.join(test_case_path, project_test_case_directories_list[2]), file_base_name + extension):
+                    try:
+                        os.symlink(os.path.join(test_case_path, project_test_case_directories_list[2], file_base_name + extension),
+                                   os.path.join(extract_run_directory, file_base_name + ".cdl"))
+                    except FileExistsError:
+                        print_to_stdout(self.msip_ese_object, "Link files already exist:\t" + os.path.join(extract_run_directory, file_base_name + ".cdl"))
+
+            try:
+                os.symlink(os.path.join(test_case_path, project_test_case_directories_list[1], file_name + gds_config_file_extension),
+                           os.path.join(extract_run_directory, file_name + gds_config_file_extension))
+            except FileExistsError:
+                print_to_stdout(self.msip_ese_object, "Link files already exist:\t" + os.path.join(extract_run_directory, file_name + gds_config_file_extension))
+
+            sample_file_object = open_file_for_reading(sample_file_directory, project_sample_runscript_file_name)
+            block_extract_command_file_object = open_file_for_writing(extract_run_directory, file_base_name + "_" + project_extract_directory_name + ".sh")
+
+            for line in sample_file_object.readlines():
+                line = line.replace("export RUN_DIR=RUNNING_DIRECTORY;", "export RUN_DIR=" + extract_run_directory + ";")
+                line = line.replace("export TOP_CELL_NAME=TOP_CELL_NAME;", "export TOP_CELL_NAME=" + top_cell_name + ";")
+                line = line.replace("export GDS_NAME=GDS_NAME;", "export GDS_NAME=" + file_base_name + gds_file_extension + ";")
+                line = line.replace("export LVS_NETLIST=LVS_NETLIST;", "export LVS_NETLIST=" + file_base_name)
+                block_extract_command_file_object.writelines(line)
+
+            sample_file_object.close()
+            block_extract_command_file_object.close()
+
+        def get_top_cell_name_and_metal(self, test_case_path, gds_file_name):
+            """
+            The function is returning top cell name and metal stack
+            :return:
+            """
+
+            return_variable = ["", "11M_3Mx_6Dx_1Gx_1Iz_LB"]
+
+            config_file = os.path.join(test_case_path, project_test_case_directories_list[1], gds_file_name + gds_config_file_extension)
+            if not check_for_file_existence(os.path.join(test_case_path, project_test_case_directories_list[1]), gds_file_name + gds_config_file_extension):
+                print_to_stderr(self.msip_ese_object, "Config file does not exist:\t" + config_file)
+            else:
+                config_file_object = open_file_for_reading(os.path.join(test_case_path, project_test_case_directories_list[1]), gds_file_name + gds_config_file_extension)
+                for line in config_file_object.readlines():
+                    if "TOP_CELL_NAME:" in line:
+                        return_variable[0] = line.split()[1]
+
+                config_file_object.close()
+
+            return return_variable
+
+        def create_extract_environment(self, test_case_name, test_case_path):
+            """
+            The function is creating extraction environments
+            :return:
+            """
+
+            test_case_target_root_dir = create_directories_hierarchy(self.msip_ese_object.get_script_run_directory, [test_case_name,
+                                                                                                                     self.msip_ese_object.get_target_project_name,
+                                                                                                                     self.msip_ese_object.get_target_project_release,
+                                                                                                                     project_extract_directory_name])
+
+            test_case_reference_root_dir = create_directories_hierarchy(self.msip_ese_object.get_script_run_directory, [test_case_name,
+                                                                                                                        self.msip_ese_object.get_reference_project_name,
+                                                                                                                        self.msip_ese_object.get_reference_project_release,
+                                                                                                                        project_extract_directory_name])
+
+            test_case_all_gds_files = get_directory_items_list(os.path.join(test_case_path, project_test_case_directories_list[1]))
+
+            for file_name in test_case_all_gds_files:
+                if file_name.endswith(gds_file_extension):
+                    file_abs_name = get_file_name_from_path(file_name)
+                    create_directory(test_case_target_root_dir, file_abs_name.upper())
+                    create_directory(test_case_reference_root_dir, file_abs_name.upper())
+
+                    test_case_target_dir = os.path.join(test_case_target_root_dir, file_abs_name.upper())
+                    test_case_reference_dir = os.path.join(test_case_reference_root_dir, file_abs_name.upper())
+
+                    gds_info = self.get_top_cell_name_and_metal(test_case_path, file_name)
+                    metal_stack = gds_info[1]
+
+                    self.create_sample_runscript(test_case_target_dir, test_case_path, file_name, gds_info[0], os.path.join(self.msip_ese_object.get_data_directory,
+                                                                                                                            project_sample_runscript_location_dir_name,
+                                                                                                                            self.msip_ese_object.get_target_project_type,
+                                                                                                                            self.msip_ese_object.get_target_project_name,
+                                                                                                                            self.msip_ese_object.get_target_project_release,
+                                                                                                                            metal_stack))
+
+                    self.create_sample_runscript(test_case_reference_dir, test_case_path, file_name, gds_info[0], os.path.join(self.msip_ese_object.get_data_directory,
+                                                                                                                               project_sample_runscript_location_dir_name,
+                                                                                                                               self.msip_ese_object.get_reference_project_type,
+                                                                                                                               self.msip_ese_object.get_reference_project_name,
+                                                                                                                               self.msip_ese_object.get_reference_project_release,
+                                                                                                                               metal_stack))
+
+        def create_all_test_cases_extract_environments(self):
+            """
+            The function is generating all extract environments
+            :return:
+            """
+
+            test_cases_hash = self.msip_ese_object.get_project_test_cases
+            all_test_cases_name = test_cases_hash.keys()
+
+            for test_case_name in all_test_cases_name:
+                self.create_extract_environment(test_case_name, test_cases_hash[test_case_name])
+
+        def execute_pex(self):
+            """
+            The function is executing all sh commands found under RUN_DIR
+            :return:
+            """
+
+            for root, directories, files in os.walk(self.msip_ese_object.get_script_run_directory):
+                for file_name in files:
+                    if file_name.endswith(".sh"):
+                        process = execute_external_command(os.path.join(root, file_name))
+                        print_to_stdout(self.msip_ese_object, "EXECUTING EXTERNAL PEX COMMAND:\t" + os.path.join(root, file_name))
+                        enable_waiting = True
+                        while enable_waiting:
+                            process_stdout = process.stdout.read()
+                            if get_string_length(process_stdout) > 0:
+                                print_to_stdout(self.msip_ese_object, process_stdout)
+                            else:
+                                enable_waiting = True
+                                print_to_stdout(self.msip_ese_object, "EXECUTING EXTERNAL PEX COMMAND FINISHED SUCCESSFULLY:")
 
     def main(self):
         """
@@ -2317,7 +2557,7 @@ chmod -R 777 *
         project_environment.setup_environment()
 
         # The sample library extraction part
-        project_environment.run_all_sample_extracts()
+        # project_environment.run_all_sample_extracts()
 
         # Grabbing and updating in the script environment the sample runscript files
         project_environment.grab_all_sample_run_scripts()
@@ -2327,6 +2567,10 @@ chmod -R 777 *
         test_cases.update_test_cases()
 
         # Do extraction
+        test_cases_extract = self.Extract(self)
+        test_cases_extract.get_test_cases()
+        test_cases_extract.create_all_test_cases_extract_environments()
+        test_cases_extract.execute_pex()
 
 
 def main():
@@ -2341,7 +2585,7 @@ def main():
     evaluation_object.set_user_script_arguments(user_script_inputs)
     evaluation_object.main()
 
-    print_to_stdout(evaluation_object, string_column_decoration(list(evaluation_object.__dict__.keys()), list(evaluation_object.__dict__.values()), 8, 1))
+    # print_to_stdout(evaluation_object, string_column_decoration(list(evaluation_object.__dict__.keys()), list(evaluation_object.__dict__.values()), 8, 1))
 
 
 if __name__ == '__main__':
