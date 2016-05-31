@@ -22,7 +22,7 @@ USAGE:  program
         EXAMPLE: msip_ESE.py
 
 DESCRIPTION:
-        The script is running ESE GUI for executing its flow.
+        The script is running ESE flow.
         ESE - Extraction and Simulation Evaluation flow is for evaluating the CCS/PCS setup updates' impact in simulation results.
 
 FOR SUPPORT(BUG/ENHANCEMENT):
@@ -73,8 +73,18 @@ available_script_options = ["-excelFile",  # Index[0] Excel file
                             "-runDirectory",  # Index[5] Script Run Directory
                             "-executedTestCasePackage",  # Index[6] Executed test case package(s)
                             "-projectsRootDirectory",  # Index[7] Projects root directory path
-                            "-forceUpdateTestCase"  # Index[8] Force Updating Test Case Package
+                            "-forceUpdateTestCase",  # Index[8] Force Updating Test Case Package
+                            "-executeFlow"  # Index[9]  Execute only selected step. Available values ENV_UPDATE/TEST_CASE_UPDATE/LVS/PEX/SIM/REPORT/CLEAN/ALL
                             ]
+
+# Available Steps Of The Flow For The Script
+available_flows = ["ENV_UPDATE",
+                   "TEST_CASE_UPDATE",
+                   "PEX",
+                   "SIM",
+                   "REPORT",
+                   "CLEAN",
+                   "ALL"]
 
 # Available excel parameters. NOTE!!! If the list value changed please make appropriate change in ReadExcel class for get_* functions
 # Important do not make any change in list order, as the script recognised the values by exact index. If there is need to do modification please update
@@ -170,10 +180,10 @@ def print_description(violated_case):
                 EXAMPLE: msip_ESE.py -excelFile ./x649_bias_check_test_case.xlsx
 
         OPTIONS:
-                {0}
+    {0}
 
         DESCRIPTION:
-                The script is running ESE GUI for executing its flow.
+                The script is running ESE flow.
                 ESE - Extraction and Simulation Evaluation flow is for evaluating the CCS/PCS setup updates' impact in simulation results.
 
         FOR SUPPORT(BUG/ENHANCEMENT):
@@ -183,7 +193,7 @@ def print_description(violated_case):
                 Vladimir Danielyan
         """.format(get_script_options_string())
 
-    print("\n\n\t" + str(violated_case) + "\n\n")
+    print("\n\t" + str(violated_case) + "\n")
     exit(description)
 
 
@@ -244,7 +254,16 @@ def get_script_options_string():
 
     final_string = ""
     for option_name in available_script_options:
-        final_string += str(option_name) + "\n\t\t"
+        if option_name == available_script_options[8]:
+            final_string += string_column_decoration([str(option_name)], ["# Available Value:\t| TRUE | (default is FALSE)"], 5, 2)
+        elif option_name == available_script_options[9]:
+            all_values = ""
+            for value in available_flows:
+                all_values += "| " + value + " |"
+            all_values += " (default is ALL)"
+            final_string += string_column_decoration([str(option_name)], ["# Available Values:\t" + all_values], 5, 2)
+        else:
+            final_string += string_column_decoration([str(option_name)], ["# Available Value:\t'" + str(option_name).replace("-", "") + "'"], 5, 2)
 
     return final_string
 
@@ -812,9 +831,220 @@ class MsipEse:
         # Force adding test case enable
         self.force_add_test_case = False
 
+        # Script flow values
+        self.update_environment = False
+        self.update_test_case = False
+        self.execute_pex = False
+        self.execute_simulation = False
+        self.execute_report = False
+        self.execute_clean_project = False
+
     # --------------------------------------------------- #
     # ----------------- Class Functions ----------------- #
     # --------------------------------------------------- #
+
+    def check_for_reference_project_execution(self):
+        """
+        The function is returning True if there is reference project setup and False if not
+        :return:
+        """
+
+        if self.get_reference_project_name is not None:
+            return True
+        else:
+            return False
+
+    def check_script_setup_correctness(self):
+        """
+        The script is checking if the script setup is correct
+        :return:
+        """
+
+        target_project_path = os.path.join(str(self.get_projects_root_dir),
+                                           str(self.get_target_project_type),
+                                           str(self.get_target_project_name),
+                                           str(self.get_target_project_release))
+
+        if not check_for_dir_existence(target_project_path, project_cad_directory_name):
+            print_to_stderr(self, "Cannot find target project. Please check Script inputs. No such directory:\t'" + str(
+                os.path.join(target_project_path, project_cad_directory_name)) + "'")
+
+    def enable_update_environment(self):
+        """
+        The function is enabling Script flow #
+        :return:
+        """
+
+        self.update_environment = True
+
+    def disable_update_environment(self):
+        """
+        The function is disabling Script flow #
+        :return:
+        """
+
+        self.update_environment = False
+
+    def check_if_update_environment(self):
+        """
+        The function is returning script flow value
+        :return:
+        """
+
+        return self.update_environment
+
+    def enable_execute_pex(self):
+        """
+        The function is enabling Script flow #
+        :return:
+        """
+
+        self.execute_pex = True
+
+    def disable_execute_pex(self):
+        """
+        The function is disabling Script flow #
+        :return:
+        """
+
+        self.execute_pex = False
+
+    def check_if_execute_pex(self):
+        """
+        The function is returning script flow value
+        :return:
+        """
+
+        return self.execute_pex
+
+    def enable_update_test_case(self):
+        """
+        The function is enabling Script flow #
+        :return:
+        """
+
+        self.update_test_case = True
+
+    def disable_update_test_case(self):
+        """
+        The function is disabling Script flow #
+        :return:
+        """
+
+        self.update_test_case = False
+
+    def check_if_update_test_case(self):
+        """
+        The function is returning script flow value
+        :return:
+        """
+
+        return self.update_test_case
+
+    def enable_execute_simulation(self):
+        """
+        The function is enabling Script flow #
+        :return:
+        """
+
+        self.execute_simulation = True
+
+    def disable_execute_simulation(self):
+        """
+        The function is disabling Script flow #
+        :return:
+        """
+
+        self.execute_simulation = False
+
+    def check_if_execute_simulation(self):
+        """
+        The function is returning script flow value
+        :return:
+        """
+
+        return self.execute_simulation
+
+    def enable_execute_report(self):
+        """
+        The function is enabling Script flow #
+        :return:
+        """
+
+        self.execute_report = True
+
+    def disable_execute_report(self):
+        """
+        The function is disabling Script flow #
+        :return:
+        """
+
+        self.execute_report = False
+
+    def check_if_execute_report(self):
+        """
+        The function is returning script flow value
+        :return:
+        """
+
+        return self.execute_report
+
+    def enable_execute_clean_project(self):
+        """
+        The function is enabling Script flow #
+        :return:
+        """
+
+        self.execute_clean_project = True
+
+    def disable_execute_clean_project(self):
+        """
+        The function is disabling Script flow #
+        :return:
+        """
+
+        self.execute_clean_project = False
+
+    def check_if_execute_clean_project(self):
+        """
+        The function is returning script flow value
+        :return:
+        """
+
+        return self.execute_clean_project
+
+    def set_executed_flow(self, flow_option_value):
+        """
+        The function is setting the executed flow
+        :param flow_option_value:
+        :return:
+        """
+
+        if flow_option_value == available_flows[0]:
+            self.enable_update_environment()
+        elif flow_option_value == available_flows[1]:
+            self.enable_update_test_case()
+        elif flow_option_value == available_flows[2]:
+            # Executing Flow till Step 3
+            self.enable_update_environment()
+            self.enable_execute_pex()
+        elif flow_option_value == available_flows[3]:
+            # Executing Flow till Step 4
+            self.enable_update_environment()
+            self.enable_execute_pex()
+            self.enable_execute_simulation()
+        elif flow_option_value == available_flows[4]:
+            self.enable_execute_report()
+        elif flow_option_value == available_flows[5]:
+            self.enable_execute_clean_project()
+        else:
+            # Executing All Steps of The Flow
+            self.enable_update_environment()
+            self.enable_update_test_case()
+            self.enable_execute_pex()
+            self.enable_execute_simulation()
+            self.enable_execute_report()
+            self.enable_execute_clean_project()
 
     def enable_force_add_test_case(self):
         """
@@ -1431,7 +1661,7 @@ class MsipEse:
                 self.msip_ese_object.set_reference_project_release(self.msip_ese_object.excel_setup[available_excel_options[18]])
                 print_to_stdout(self.msip_ese_object, "FOUND REFERENCE PROJECT RELEASE\t" + str(self.msip_ese_object.get_reference_project_release))
             else:
-                print_to_stdout(self.msip_ese_object, "Cannot find reference project name. Please check script/excel file inputs")
+                print_to_stderr(self.msip_ese_object, "Cannot find reference project name. Please check script/excel file inputs")
 
             return None
 
@@ -1549,9 +1779,10 @@ class MsipEse:
             self.setup_target_project_metal_stack_list()
 
             self.setup_reference_project_name()
-            self.setup_reference_project_release()
-            self.setup_reference_project_type()
-            self.setup_reference_project_metal_stack_list()
+            if self.msip_ese_object.check_for_reference_project_execution():
+                self.setup_reference_project_release()
+                self.setup_reference_project_type()
+                self.setup_reference_project_metal_stack_list()
 
         @staticmethod
         def generate_ude_command(project_type, project_name, project_release, project_metal_stack, run_directory):
@@ -1707,7 +1938,6 @@ set outDir "{1}" \n""".format(run_directory, output_directory)
             print_to_stdout(self.msip_ese_object, "RUNNING SAMPLE EXTRACT STEP\n")
 
             all_target_metal_stack = self.msip_ese_object.get_target_project_metal_stack_list
-            all_reference_metal_stack = self.msip_ese_object.get_reference_project_metal_stack_list
 
             # Creating running directory
             for metal_stack in all_target_metal_stack:
@@ -1724,19 +1954,22 @@ set outDir "{1}" \n""".format(run_directory, output_directory)
                                          metal_stack,
                                          target_run_path)
 
-            for metal_stack in all_reference_metal_stack:
-                reference_run_path = create_directories_hierarchy(self.msip_ese_object.get_script_run_directory, [self.msip_ese_object.get_reference_project_type,
-                                                                                                                  self.msip_ese_object.get_reference_project_name,
-                                                                                                                  self.msip_ese_object.get_reference_project_release,
-                                                                                                                  metal_stack,
-                                                                                                                  project_extract_directory_name])
+            if self.msip_ese_object.check_for_reference_project_execution():
+                all_reference_metal_stack = self.msip_ese_object.get_reference_project_metal_stack_list
 
-                self.extract_sample_cell(self.msip_ese_object.get_reference_project_pex_tool_name,
-                                         self.msip_ese_object.get_reference_project_type,
-                                         self.msip_ese_object.get_reference_project_name,
-                                         self.msip_ese_object.get_reference_project_release,
-                                         metal_stack,
-                                         reference_run_path)
+                for metal_stack in all_reference_metal_stack:
+                    reference_run_path = create_directories_hierarchy(self.msip_ese_object.get_script_run_directory, [self.msip_ese_object.get_reference_project_type,
+                                                                                                                      self.msip_ese_object.get_reference_project_name,
+                                                                                                                      self.msip_ese_object.get_reference_project_release,
+                                                                                                                      metal_stack,
+                                                                                                                      project_extract_directory_name])
+
+                    self.extract_sample_cell(self.msip_ese_object.get_reference_project_pex_tool_name,
+                                             self.msip_ese_object.get_reference_project_type,
+                                             self.msip_ese_object.get_reference_project_name,
+                                             self.msip_ese_object.get_reference_project_release,
+                                             metal_stack,
+                                             reference_run_path)
 
         def check_for_ude_extract_flow_correctness(self, run_directory, tool_name):
             """
@@ -1834,7 +2067,7 @@ set outDir "{1}" \n""".format(run_directory, output_directory)
                             line_for_writing = line_for_writing.replace(os.path.join(script_run_directory, project_type, project_name, project_release, metal_stack), "$RUN_DIR")
                             line_for_writing = line_for_writing.replace("SampleExtract", "$TOP_CELL_NAME")
                             line_for_writing = line_for_writing.replace(".gds.gz", ".gds").replace("$TOP_CELL_NAME.gds", "$GDS_NAME")
-                            target_sample_command_file_object.writelines(line_for_writing.replace("/STAR_rcc_typical", ""))
+                            target_sample_command_file_object.writelines(line_for_writing)
 
         def grab_all_sample_run_scripts(self):
             """
@@ -1846,10 +2079,8 @@ set outDir "{1}" \n""".format(run_directory, output_directory)
             print_to_stdout(self.msip_ese_object, "GRABBING SAMPLE RUNSCRIPT FILES\n")
 
             all_target_sample_runscript_files = {}
-            all_reference_sample_runscript_files = {}
 
             all_target_metal_stack = self.msip_ese_object.get_target_project_metal_stack_list
-            all_reference_metal_stack = self.msip_ese_object.get_reference_project_metal_stack_list
 
             for metal_stack in all_target_metal_stack:
                 target_path = os.path.join(self.msip_ese_object.get_script_run_directory,
@@ -1872,54 +2103,59 @@ set outDir "{1}" \n""".format(run_directory, output_directory)
                     print_to_stderr(self.msip_ese_object, "Something wrong with sample cell extraction step\n\t\t"
                                                           "No LVS result or SPF file exist. Please check\n\t\t'" + str(target_path) + "'")
 
-            for metal_stack in all_reference_metal_stack:
-                reference_path = os.path.join(self.msip_ese_object.get_script_run_directory,
-                                              self.msip_ese_object.get_reference_project_type,
-                                              self.msip_ese_object.get_reference_project_name,
-                                              self.msip_ese_object.get_reference_project_release,
-                                              metal_stack,
-                                              project_extract_directory_name
-                                              )
-                if self.check_for_ude_extract_flow_correctness(reference_path, self.msip_ese_object.get_reference_project_pex_tool_name):
-                    sample_runscript_file = self.get_sample_runscript(reference_path)
-                    if sample_runscript_file is not None:
-                        if get_file_size(sample_runscript_file) > 0:
-                            all_reference_sample_runscript_files[metal_stack] = sample_runscript_file
+            if self.msip_ese_object.check_for_reference_project_execution():
+
+                all_reference_sample_runscript_files = {}
+                all_reference_metal_stack = self.msip_ese_object.get_reference_project_metal_stack_list
+
+                for metal_stack in all_target_metal_stack:
+                    destination_path = create_directories_hierarchy(self.msip_ese_object.get_data_directory, [project_sample_runscript_location_dir_name,
+                                                                                                              self.msip_ese_object.get_target_project_type,
+                                                                                                              self.msip_ese_object.get_target_project_name,
+                                                                                                              self.msip_ese_object.get_target_project_release,
+                                                                                                              metal_stack])
+                    self.update_environment_sample_runscript_files(file_item=all_target_sample_runscript_files[metal_stack],
+                                                                   path_to_place=destination_path,
+                                                                   script_run_directory=self.msip_ese_object.get_script_environment_path,
+                                                                   project_type=self.msip_ese_object.get_target_project_type,
+                                                                   project_name=self.msip_ese_object.get_target_project_name,
+                                                                   project_release=self.msip_ese_object.get_target_project_release,
+                                                                   metal_stack=metal_stack)
+
+                for metal_stack in all_reference_metal_stack:
+                    reference_path = os.path.join(self.msip_ese_object.get_script_run_directory,
+                                                  self.msip_ese_object.get_reference_project_type,
+                                                  self.msip_ese_object.get_reference_project_name,
+                                                  self.msip_ese_object.get_reference_project_release,
+                                                  metal_stack,
+                                                  project_extract_directory_name
+                                                  )
+                    if self.check_for_ude_extract_flow_correctness(reference_path, self.msip_ese_object.get_reference_project_pex_tool_name):
+                        sample_runscript_file = self.get_sample_runscript(reference_path)
+                        if sample_runscript_file is not None:
+                            if get_file_size(sample_runscript_file) > 0:
+                                all_reference_sample_runscript_files[metal_stack] = sample_runscript_file
+                            else:
+                                all_reference_sample_runscript_files[metal_stack] = None
                         else:
                             all_reference_sample_runscript_files[metal_stack] = None
                     else:
-                        all_reference_sample_runscript_files[metal_stack] = None
-                else:
-                    print_to_stderr(self.msip_ese_object, "Something wrong with sample cell extraction step\n\t\t"
-                                                          "No LVS result or SPF file exist. Please check\n\t\t'" + str(reference_path) + "'")
+                        print_to_stderr(self.msip_ese_object, "Something wrong with sample cell extraction step\n\t\t"
+                                                              "No LVS result or SPF file exist. Please check\n\t\t'" + str(reference_path) + "'")
 
-            for metal_stack in all_target_metal_stack:
-                destination_path = create_directories_hierarchy(self.msip_ese_object.get_data_directory, [project_sample_runscript_location_dir_name,
-                                                                                                          self.msip_ese_object.get_target_project_type,
-                                                                                                          self.msip_ese_object.get_target_project_name,
-                                                                                                          self.msip_ese_object.get_target_project_release,
-                                                                                                          metal_stack])
-                self.update_environment_sample_runscript_files(file_item=all_target_sample_runscript_files[metal_stack],
-                                                               path_to_place=destination_path,
-                                                               script_run_directory=self.msip_ese_object.get_script_environment_path,
-                                                               project_type=self.msip_ese_object.get_target_project_type,
-                                                               project_name=self.msip_ese_object.get_target_project_name,
-                                                               project_release=self.msip_ese_object.get_target_project_release,
-                                                               metal_stack=metal_stack)
-
-            for metal_stack in all_reference_metal_stack:
-                destination_path = create_directories_hierarchy(self.msip_ese_object.get_data_directory, [project_sample_runscript_location_dir_name,
-                                                                                                          self.msip_ese_object.get_reference_project_type,
-                                                                                                          self.msip_ese_object.get_reference_project_name,
-                                                                                                          self.msip_ese_object.get_reference_project_release,
-                                                                                                          metal_stack])
-                self.update_environment_sample_runscript_files(file_item=all_reference_sample_runscript_files[metal_stack],
-                                                               path_to_place=destination_path,
-                                                               script_run_directory=self.msip_ese_object.get_script_environment_path,
-                                                               project_type=self.msip_ese_object.get_reference_project_type,
-                                                               project_name=self.msip_ese_object.get_reference_project_name,
-                                                               project_release=self.msip_ese_object.get_reference_project_release,
-                                                               metal_stack=metal_stack)
+                for metal_stack in all_reference_metal_stack:
+                    destination_path = create_directories_hierarchy(self.msip_ese_object.get_data_directory, [project_sample_runscript_location_dir_name,
+                                                                                                              self.msip_ese_object.get_reference_project_type,
+                                                                                                              self.msip_ese_object.get_reference_project_name,
+                                                                                                              self.msip_ese_object.get_reference_project_release,
+                                                                                                              metal_stack])
+                    self.update_environment_sample_runscript_files(file_item=all_reference_sample_runscript_files[metal_stack],
+                                                                   path_to_place=destination_path,
+                                                                   script_run_directory=self.msip_ese_object.get_script_environment_path,
+                                                                   project_type=self.msip_ese_object.get_reference_project_type,
+                                                                   project_name=self.msip_ese_object.get_reference_project_name,
+                                                                   project_release=self.msip_ese_object.get_reference_project_release,
+                                                                   metal_stack=metal_stack)
 
     class ScriptInputs:
         """
@@ -2039,6 +2275,8 @@ set outDir "{1}" \n""".format(run_directory, output_directory)
                     self.msip_ese_object.set_projects_root_directory(script_option_value)
                 elif script_option_name == available_script_options[8]:
                     self.msip_ese_object.enable_force_add_test_case()
+                elif script_option_name == available_script_options[9]:
+                    self.msip_ese_object.set_executed_flow(script_option_name)
 
     class Excel:
         """
@@ -2114,7 +2352,7 @@ set outDir "{1}" \n""".format(run_directory, output_directory)
             :return:
             """
 
-            if check_if_string_is_empty(excel_file):
+            if excel_file is None:
                 print_to_stdout(self.msip_ese_object, "No any excel file selected.\nSkip the step")
             else:
                 if check_for_file_existence(get_file_path(excel_file), get_file_name_from_path(excel_file)):
@@ -2548,29 +2786,43 @@ chmod -R 777 *
         print_to_stdout(self, "READING SCRIPT ARGUMENTS")
         print_to_stdout(self, "Script Inputs Is:\n" + string_column_decoration(list(script_arguments.keys()), list(script_arguments.values()), 5, 4))
 
+        # All Instances of the Script
+
         # The initialisation of excel class and reading it
         script_excel_instance = self.Excel(self)
-        script_excel_instance.get_information_from_excel_file(self.get_script_excel_file)
 
         # The initialisation of ProjectEnvironment class instance
         project_environment = self.ProjectEnvironment(self)
+
+        # The initialisation of TestCases class instance
+        test_cases = self.TestCases(self)
+
+        # The initialisation of Extract class instance
+        test_cases_extract = self.Extract(self)
+
+        # Setting Target Project Name/Release from Script Input or Excel File
+        script_excel_instance.get_information_from_excel_file(self.get_script_excel_file)
         project_environment.setup_environment()
 
-        # The sample library extraction part
-        # project_environment.run_all_sample_extracts()
+        # Checking for script input correctness
+        self.check_script_setup_correctness()
 
-        # Grabbing and updating in the script environment the sample runscript files
-        project_environment.grab_all_sample_run_scripts()
+        if self.check_if_update_environment():
+            # The sample library extraction part
+            project_environment.run_all_sample_extracts()
 
-        # Updating test cases
-        test_cases = self.TestCases(self)
-        test_cases.update_test_cases()
+            # Grabbing and updating in the script environment the sample runscript files
+            project_environment.grab_all_sample_run_scripts()
 
-        # Do extraction
-        test_cases_extract = self.Extract(self)
-        test_cases_extract.get_test_cases()
-        test_cases_extract.create_all_test_cases_extract_environments()
-        test_cases_extract.execute_pex()
+        if self.check_if_update_test_case():
+            # Updating test cases
+            test_cases.update_test_cases()
+
+        if self.check_if_execute_pex():
+            # Do extraction
+            test_cases_extract.get_test_cases()
+            test_cases_extract.create_all_test_cases_extract_environments()
+            test_cases_extract.execute_pex()
 
 
 def main():
