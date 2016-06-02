@@ -2949,6 +2949,14 @@ chmod -R 777 *
 
             self.msip_ese_object = msip_ese_object
 
+        def run_simulation(self):
+            """
+            The function is executing simulations
+            :return:
+            """
+
+            print_to_stdout(self.msip_ese_object, "Executing Simulation")
+
     class Report:
         """
         The Reporting class
@@ -2960,6 +2968,14 @@ chmod -R 777 *
             """
 
             self.msip_ese_object = msip_ese_object
+
+        def gen_excel_report(self):
+            """
+            The function is generating excel report
+            :return:
+            """
+
+            print_to_stdout(self.msip_ese_object, "Generating excel report")
 
     def main(self):
         """
@@ -3002,7 +3018,7 @@ chmod -R 777 *
         test_cases_extract = self.Extract(self)
 
         # The initialisation of Simulation class instance
-        simulate = self.Simulation(self)
+        simulation = self.Simulation(self)
 
         # The initialisation of Report class
         report = self.Report(self)
@@ -3042,6 +3058,16 @@ chmod -R 777 *
             print("\t\tCOMPLETED")
         else:
             print("\tSTEP4:\tSkipping STEP 'Running PEX on Test Case(s)'")
+
+        if self.check_if_execute_simulation():
+            print("\tSTEP5:\tPROCESSING ...\t\t# Running SIM on Test Case(s)")
+            simulation.run_simulation()
+            print("\t\tCOMPLETED")
+
+        if self.check_if_execute_report():
+            print("\tSTEP6:\tPROCESSING ...\t\t# Running Reporting step")
+            report.gen_excel_report()
+            print("\t\tCOMPLETED")
 
 
 def main():
