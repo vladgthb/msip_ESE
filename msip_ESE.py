@@ -78,8 +78,8 @@ available_script_options = ["-excelFile",  # Index[0] Excel file
                             ]
 
 # Available Steps Of The Flow For The Script
-available_flows = ["ENV_UPDATE",
-                   "TEST_CASE_UPDATE",
+available_flows = ["UPDATE_ENV",
+                   "UPDATE_TEST_CASE",
                    "PEX",
                    "SIM",
                    "REPORT",
@@ -138,6 +138,7 @@ untar_directory_name = "UNTAR"
 project_environment_file_name = "env.tcl"
 project_cad_directory_name = "cad"
 project_extract_directory_name = "PEX"
+project_SPF_directory_name = "SPF"
 project_sample_oa_library_directory_name = "SAMPLE_OA_LIBRARIES"
 project_sample_oa_library_names_list = ["SampleLibrary"]
 project_sample_oa_cell_name = "SampleExtract"
@@ -1020,18 +1021,17 @@ class MsipEse:
         :return:
         """
 
-        if flow_option_value == available_flows[0]:
+        if str(flow_option_value).upper() == "NONE":
+            return
+        elif flow_option_value == available_flows[0]:
             self.enable_update_environment()
         elif flow_option_value == available_flows[1]:
             self.enable_update_test_case()
         elif flow_option_value == available_flows[2]:
-            # Executing Flow till Step 3
-            self.enable_update_environment()
+            # Executing Flow Step 3
             self.enable_execute_pex()
         elif flow_option_value == available_flows[3]:
-            # Executing Flow till Step 4
-            self.enable_update_environment()
-            self.enable_execute_pex()
+            # Executing Flow Step 4
             self.enable_execute_simulation()
         elif flow_option_value == available_flows[4]:
             self.enable_execute_report()
@@ -1627,7 +1627,7 @@ class MsipEse:
                 self.msip_ese_object.set_reference_project_name(self.msip_ese_object.excel_setup[available_excel_options[17]])
                 print_to_stdout(self.msip_ese_object, "FOUND REFERENCE PROJECT NAME\t" + str(self.msip_ese_object.get_reference_project_name))
             else:
-                print_to_stdout(self.msip_ese_object, "Cannot find reference project name. Please check script/excel file inputs")
+                print_to_stdout(self.msip_ese_object, "WARNING!:\tCannot find reference project name. Please check script/excel file inputs")
 
             return None
 
@@ -2021,29 +2021,184 @@ set outDir "{1}" \n""".format(run_directory, output_directory)
             print_to_stdout(self.msip_ese_object, "Warning!!: No any sample file found")
             return None
 
-        def update_environment_sample_runscript_files(self, file_item, path_to_place, script_run_directory, project_type, project_name, project_release, metal_stack):
+        @staticmethod
+        def change_module_load_line(line):
+            """
+            The function is changing module load line to have the version in variable
+            :param line:
+            :return:
+            """
+
+            if "module load " in line:
+                line_list = line.split()
+                if get_list_length(line_list) > 2:
+                    if line_list[0][0] == "#":
+                        # Checking if the line is not starting with comment
+                        return line
+                    else:
+                        module_original_name = str(line_list[2]).split("/")[0]
+                        module_name = module_original_name + '_VERSION'
+                        try:
+                            module_version = "/" + str(line_list[2]).split("/")[1]
+                        except IndexError:
+                            module_version = ""
+                        line = "export " + module_name + '="' + module_version + '"\n'
+                        line += "module load " + module_original_name + "$" + module_name + "\n"
+                        return line
+                else:
+                    return line
+            else:
+                return line
+
+        @staticmethod
+        def get_gds_file_name_from_line(line):
+            """
+            The function is returning lane with layer map file
+            :return:
+            """
+
+            gds_name = "NONE"
+
+            line_l = str(line).split()
+            layer_gds_command = "-gds"
+            if layer_gds_command in line:
+                layer_gds_file_index = line_l.index(layer_gds_command) + 1
+                gds_name = line_l[layer_gds_file_index]
+
+            return gds_name
+
+        @staticmethod
+        def get_lvs_file_name_from_line(line):
+            """
+            The function is returning lane with layer map file
+            :return:
+            """
+
+            lvs_file = "NONE"
+
+            line_l = str(line).split()
+            command = "-sp"
+            if command in line:
+                layer_gds_file_index = line_l.index(command) + 1
+                lvs_file = line_l[layer_gds_file_index]
+
+            return lvs_file
+
+        @staticmethod
+        def replace_source_me_file_name_from_line(line):
+            """
+            The function is returning lane with layer map file
+            :return:
+            """
+
+            if "sourceme" in line:
+                line_l = str(line).split()
+                return 'export PEX_SOURCE_ME=' + line_l[1] + '\n' + line.replace(line_l[1], "$PEX_SOURCE_ME")
+            else:
+                return line
+
+        @staticmethod
+        def replace_gen_ev_file_name_from_line(line):
+            """
+            The function is returning lane with layer map file
+            :return:
+            """
+
+            deck = "NONE"
+            option_file = "NONE"
+            stream_map = "NONE"
+            line_l = str(line).split()
+
+            if "-foundry-rule" in line:
+                deck = line_l[line_l.index("-foundry-rule") + 1]
+            if "-options-file" in line:
+                option_file = line_l[line_l.index("-options-file") + 1]
+            if "-stream-map" in line:
+                stream_map = line_l[line_l.index("-stream-map") + 1]
+
+            target_line = 'export PEX_DECK="' + deck + '"\n' + 'export PEX_OPTION_FILE="' + option_file + '"\n' + 'export STREAM_FILE="' + stream_map + '"\n'
+            return target_line + line.replace(deck, "$PEX_DECK").replace(option_file, "$PEX_OPTION_FILE").replace(stream_map, "$STREAM_FILE") + "\n"
+
+        @staticmethod
+        def replace_command_line(line, gds_name, lvs_netlist, layer_map_file, source_me_file, option_file, run_dir, output_dir):
+            """
+            The function is changing the line
+            :param option_file:
+            :param source_me_file:
+            :param line:
+            :param gds_name:
+            :param lvs_netlist:
+            :param layer_map_file:
+            :param run_dir:
+            :param output_dir:
+            :return:
+            """
+
+            line = line.replace(lvs_netlist, "$LVS_NETLIST").replace(gds_name + ".gz", "$GDS_FILE").replace(gds_name, "$GDS_FILE")
+            line = line.replace(layer_map_file, "$LAYER_MAP_FILE").replace(source_me_file, "$PEX_SOURCE_ME").replace(option_file, "$OPTION_FILE")
+            return line.replace(run_dir, "${RUN_DIR}").replace(output_dir, "$OUTPUT_DIR").replace(project_sample_oa_cell_name, "${TOP_CELL_NAME}")
+
+        @staticmethod
+        def replace_output_directory(line, run_dir, lvs_netlist):
+
+            line_l = line.split()
+            if "-output" in line:
+                output_dir = get_file_path(line_l[line_l.index("-output") + 1])
+                print(lvs_netlist)
+                return ['export OUTPUT_DIR="";\n' + line.replace(lvs_netlist, "${LVS_NETLIST}").replace(run_dir, "${RUN_DIR}").replace(output_dir, "${OUTPUT_DIR}"), output_dir]
+            else:
+                return ["", "NONE"]
+
+        def update_environment_sample_runscript_files(self, file_item, path_to_place, tool_name):
             """
             The function is updating sample run script file in the environment
             :param file_item:
             :param path_to_place:
-            :param script_run_directory:
-            :param project_type:
-            :param project_name:
-            :param project_release:
-            :param metal_stack:
+            :param tool_name:
             :return:
             """
 
-            unneeded_line_list = ["exportstream", "gzip", "COMPRESS_GDS", "export_stream"]
+            gds_recognition_line = "exportStream"
+            lvs_recognition_line = "nettran"
+            source_me_recognition_line = "source"
+            star_cmd_recognition_line = "gen_starcmd"
+
+            gen_ev_recognition_line = "gen_" + str(tool_name).lower()
+
+            unneeded_line_list = ["gzip", "COMPRESS_GDS", "export_stream", "mkdir", "rm -fR"]
+            gds_file = "NONE"
+            lvs_file = "NONE"
+            layer_map_file = "NONE"
+            source_me_file = "NONE"
+            option_file = "NONE"
+            output_dir = "NONE"
 
             file_name = get_file_name_from_path(file_item)
 
             if file_name is not None:
-                netlist_file_name = ""
                 file_object = open_file_for_reading(get_file_path(file_item), file_name)
                 target_sample_command_file_object = open_file_for_writing(path_to_place, file_name)
                 for line in file_object.readlines():
-                    line = str(line.split(">")[0])
+                    line = self.change_module_load_line(line)
+
+                    if gds_recognition_line in line:
+                        gds_file = self.get_gds_file_name_from_line(line)
+                        line = "\n"
+
+                    if lvs_recognition_line in line:
+                        lvs_file = self.get_lvs_file_name_from_line(line)
+
+                    if source_me_recognition_line in line:
+                        line = self.replace_source_me_file_name_from_line(line)
+
+                    if gen_ev_recognition_line in line:
+                        line = self.replace_gen_ev_file_name_from_line(line)
+
+                    if star_cmd_recognition_line in line:
+                        command_result = self.replace_output_directory(line, get_file_path(file_item), lvs_file)
+                        line = command_result[0]
+                        output_dir = command_result[1]
+
                     enable_writing = True
                     for unneeded_line in unneeded_line_list:
                         if str(unneeded_line).upper() in line.upper():
@@ -2052,21 +2207,10 @@ set outDir "{1}" \n""".format(run_directory, output_directory)
                     if enable_writing:
                         if "export METAL_STACK" in line:
                             target_sample_command_file_object.writelines(
-                                line + "export RUN_DIR=RUNNING_DIRECTORY;\nexport TOP_CELL_NAME=TOP_CELL_NAME;\nexport GDS_NAME=GDS_NAME;\nexport LVS_NETLIST=LVS_NETLIST;\n")
+                                "\n\n" + line + 'export RUN_DIR="";\nexport TOP_CELL_NAME="";\nexport GDS_FILE="";\nexport LVS_NETLIST="";\n')
                         else:
-                            line_for_writing = str(line).replace(get_file_path(file_item), "$RUN_DIR")
-                            if ("nettran" in line) and (".cdl" in line):
-                                try:
-                                    netlist_file_name = line_for_writing.split(".cdl")[0].split("/")[1]
-                                except IndexError:
-                                    print_to_stderr(self.msip_ese_object, "Cannot find lvs netlist name from runscript file:\t" + str(get_file_path(file_item), file_name))
-                            if get_string_length(netlist_file_name) > 0:
-                                line_for_writing = line_for_writing.replace(netlist_file_name, "$LVS_NETLIST")
-                            latest_dir_name = str(get_file_path(file_item).split("/")[-1])
-                            line_for_writing = line_for_writing.replace(get_file_path(file_item).replace(latest_dir_name, ""), "$RUN_DIR/")
-                            line_for_writing = line_for_writing.replace(os.path.join(script_run_directory, project_type, project_name, project_release, metal_stack), "$RUN_DIR")
-                            line_for_writing = line_for_writing.replace("SampleExtract", "$TOP_CELL_NAME")
-                            line_for_writing = line_for_writing.replace(".gds.gz", ".gds").replace("$TOP_CELL_NAME.gds", "$GDS_NAME")
+                            line_for_writing = self.replace_command_line(line, gds_file, lvs_file, layer_map_file, source_me_file, option_file, get_file_path(file_item),
+                                                                         output_dir)
                             target_sample_command_file_object.writelines(line_for_writing)
 
         def grab_all_sample_run_scripts(self):
@@ -2103,24 +2247,20 @@ set outDir "{1}" \n""".format(run_directory, output_directory)
                     print_to_stderr(self.msip_ese_object, "Something wrong with sample cell extraction step\n\t\t"
                                                           "No LVS result or SPF file exist. Please check\n\t\t'" + str(target_path) + "'")
 
-            if self.msip_ese_object.check_for_reference_project_execution():
+            for metal_stack in all_target_metal_stack:
+                destination_path = create_directories_hierarchy(self.msip_ese_object.get_data_directory, [project_sample_runscript_location_dir_name,
+                                                                                                          self.msip_ese_object.get_target_project_type,
+                                                                                                          self.msip_ese_object.get_target_project_name,
+                                                                                                          self.msip_ese_object.get_target_project_release,
+                                                                                                          metal_stack,
+                                                                                                          project_extract_directory_name])
+                self.update_environment_sample_runscript_files(file_item=all_target_sample_runscript_files[metal_stack],
+                                                               path_to_place=destination_path,
+                                                               tool_name=self.msip_ese_object.get_target_project_pex_tool_name)
 
+            if self.msip_ese_object.check_for_reference_project_execution():
                 all_reference_sample_runscript_files = {}
                 all_reference_metal_stack = self.msip_ese_object.get_reference_project_metal_stack_list
-
-                for metal_stack in all_target_metal_stack:
-                    destination_path = create_directories_hierarchy(self.msip_ese_object.get_data_directory, [project_sample_runscript_location_dir_name,
-                                                                                                              self.msip_ese_object.get_target_project_type,
-                                                                                                              self.msip_ese_object.get_target_project_name,
-                                                                                                              self.msip_ese_object.get_target_project_release,
-                                                                                                              metal_stack])
-                    self.update_environment_sample_runscript_files(file_item=all_target_sample_runscript_files[metal_stack],
-                                                                   path_to_place=destination_path,
-                                                                   script_run_directory=self.msip_ese_object.get_script_environment_path,
-                                                                   project_type=self.msip_ese_object.get_target_project_type,
-                                                                   project_name=self.msip_ese_object.get_target_project_name,
-                                                                   project_release=self.msip_ese_object.get_target_project_release,
-                                                                   metal_stack=metal_stack)
 
                 for metal_stack in all_reference_metal_stack:
                     reference_path = os.path.join(self.msip_ese_object.get_script_run_directory,
@@ -2148,14 +2288,11 @@ set outDir "{1}" \n""".format(run_directory, output_directory)
                                                                                                               self.msip_ese_object.get_reference_project_type,
                                                                                                               self.msip_ese_object.get_reference_project_name,
                                                                                                               self.msip_ese_object.get_reference_project_release,
-                                                                                                              metal_stack])
+                                                                                                              metal_stack,
+                                                                                                              project_extract_directory_name])
                     self.update_environment_sample_runscript_files(file_item=all_reference_sample_runscript_files[metal_stack],
                                                                    path_to_place=destination_path,
-                                                                   script_run_directory=self.msip_ese_object.get_script_environment_path,
-                                                                   project_type=self.msip_ese_object.get_reference_project_type,
-                                                                   project_name=self.msip_ese_object.get_reference_project_name,
-                                                                   project_release=self.msip_ese_object.get_reference_project_release,
-                                                                   metal_stack=metal_stack)
+                                                                   tool_name=self.msip_ese_object.get_reference_project_pex_tool_name)
 
     class ScriptInputs:
         """
@@ -2276,7 +2413,7 @@ set outDir "{1}" \n""".format(run_directory, output_directory)
                 elif script_option_name == available_script_options[8]:
                     self.msip_ese_object.enable_force_add_test_case()
                 elif script_option_name == available_script_options[9]:
-                    self.msip_ese_object.set_executed_flow(script_option_name)
+                    self.msip_ese_object.set_executed_flow(script_option_value)
 
     class Excel:
         """
@@ -2618,12 +2755,16 @@ chmod -R 777 *
                 # noinspection PyUnboundLocalVariable
                 test_cases_hash[test_case_name] = test_case_path
 
-            self.msip_ese_object.set_project_test_cases(test_cases_hash)
+            if get_list_length(test_cases_hash.keys()) > 0:
+                self.msip_ese_object.set_project_test_cases(test_cases_hash)
+            else:
+                print_to_stderr(self.msip_ese_object, "Cannot find any test case inside directory:\t'" + str(self.msip_ese_object.get_test_cases_directory) + "'")
 
-        def create_sample_runscript(self, extract_run_directory, test_case_path, file_name, top_cell_name, sample_file_directory):
+        def create_sample_runscript(self, extract_run_directory, extract_output_dir, test_case_path, file_name, top_cell_name, sample_file_directory):
             """
             The function is generating environment for execution extract
             :param extract_run_directory:
+            :param extract_output_dir:
             :param test_case_path:
             :param top_cell_name:
             :param file_name:
@@ -2656,10 +2797,12 @@ chmod -R 777 *
             block_extract_command_file_object = open_file_for_writing(extract_run_directory, file_base_name + "_" + project_extract_directory_name + ".sh")
 
             for line in sample_file_object.readlines():
-                line = line.replace("export RUN_DIR=RUNNING_DIRECTORY;", "export RUN_DIR=" + extract_run_directory + ";")
-                line = line.replace("export TOP_CELL_NAME=TOP_CELL_NAME;", "export TOP_CELL_NAME=" + top_cell_name + ";")
-                line = line.replace("export GDS_NAME=GDS_NAME;", "export GDS_NAME=" + file_base_name + gds_file_extension + ";")
-                line = line.replace("export LVS_NETLIST=LVS_NETLIST;", "export LVS_NETLIST=" + file_base_name)
+                line = line.replace('export RUN_DIR="";', "export RUN_DIR=" + extract_run_directory + ";")
+                line = line.replace("export TOP_CELL_NAME=\"\";", "export TOP_CELL_NAME=" + top_cell_name + ";")
+                line = line.replace("export GDS_FILE=\"\";", "export GDS_FILE=" + file_base_name + gds_file_extension + ";")
+                line = line.replace("export LVS_NETLIST=\"\";", "export LVS_NETLIST=" + file_base_name + ".cdl")
+                line = line.replace("export OUTPUT_DIR=\"\"", "export OUTPUT_DIR=" + extract_output_dir)
+                line = line.replace("cd ${RUN_DIR};", "cd ${RUN_DIR};\nmkdir STAR_rcc_typical\n")
                 block_extract_command_file_object.writelines(line)
 
             sample_file_object.close()
@@ -2692,43 +2835,77 @@ chmod -R 777 *
             :return:
             """
 
-            test_case_target_root_dir = create_directories_hierarchy(self.msip_ese_object.get_script_run_directory, [test_case_name,
-                                                                                                                     self.msip_ese_object.get_target_project_name,
-                                                                                                                     self.msip_ese_object.get_target_project_release,
-                                                                                                                     project_extract_directory_name])
+            shell_command_path = os.path.join(self.msip_ese_object.get_script_run_directory, test_case_name)
 
-            test_case_reference_root_dir = create_directories_hierarchy(self.msip_ese_object.get_script_run_directory, [test_case_name,
-                                                                                                                        self.msip_ese_object.get_reference_project_name,
-                                                                                                                        self.msip_ese_object.get_reference_project_release,
-                                                                                                                        project_extract_directory_name])
+            test_case_target_root_dir = create_directories_hierarchy(self.msip_ese_object.get_script_run_directory,
+                                                                     [test_case_name,
+                                                                      self.msip_ese_object.get_target_project_name,
+                                                                      self.msip_ese_object.get_target_project_release,
+                                                                      project_extract_directory_name])
+
+            test_case_target_result_directory = create_directories_hierarchy(self.msip_ese_object.get_results_directory,
+                                                                             [test_case_name,
+                                                                              self.msip_ese_object.get_target_project_name,
+                                                                              self.msip_ese_object.get_target_project_release,
+                                                                              project_SPF_directory_name])
+
+            if self.msip_ese_object.check_for_reference_project_execution():
+                test_case_reference_root_dir = create_directories_hierarchy(self.msip_ese_object.get_script_run_directory,
+                                                                            [test_case_name,
+                                                                             self.msip_ese_object.get_reference_project_name,
+                                                                             self.msip_ese_object.get_reference_project_release,
+                                                                             project_extract_directory_name])
+
+                test_case_reference_result_directory = create_directories_hierarchy(self.msip_ese_object.get_results_directory,
+                                                                                    [test_case_name,
+                                                                                     self.msip_ese_object.get_reference_project_name,
+                                                                                     self.msip_ese_object.get_reference_project_release,
+                                                                                     project_SPF_directory_name])
 
             test_case_all_gds_files = get_directory_items_list(os.path.join(test_case_path, project_test_case_directories_list[1]))
 
             for file_name in test_case_all_gds_files:
                 if file_name.endswith(gds_file_extension):
                     file_abs_name = get_file_name_from_path(file_name)
+
                     create_directory(test_case_target_root_dir, file_abs_name.upper())
-                    create_directory(test_case_reference_root_dir, file_abs_name.upper())
+                    create_directory(test_case_target_result_directory, file_abs_name.upper())
 
                     test_case_target_dir = os.path.join(test_case_target_root_dir, file_abs_name.upper())
-                    test_case_reference_dir = os.path.join(test_case_reference_root_dir, file_abs_name.upper())
+                    test_case_target_output_dir = os.path.join(test_case_target_result_directory, file_abs_name.upper())
 
                     gds_info = self.get_top_cell_name_and_metal(test_case_path, file_name)
                     metal_stack = gds_info[1]
 
-                    self.create_sample_runscript(test_case_target_dir, test_case_path, file_name, gds_info[0], os.path.join(self.msip_ese_object.get_data_directory,
-                                                                                                                            project_sample_runscript_location_dir_name,
-                                                                                                                            self.msip_ese_object.get_target_project_type,
-                                                                                                                            self.msip_ese_object.get_target_project_name,
-                                                                                                                            self.msip_ese_object.get_target_project_release,
-                                                                                                                            metal_stack))
+                    self.create_sample_runscript(test_case_target_dir, test_case_target_output_dir, test_case_path, file_name, gds_info[0],
+                                                 os.path.join(self.msip_ese_object.get_data_directory,
+                                                              project_sample_runscript_location_dir_name,
+                                                              self.msip_ese_object.get_target_project_type,
+                                                              self.msip_ese_object.get_target_project_name,
+                                                              self.msip_ese_object.get_target_project_release,
+                                                              metal_stack,
+                                                              project_extract_directory_name))
 
-                    self.create_sample_runscript(test_case_reference_dir, test_case_path, file_name, gds_info[0], os.path.join(self.msip_ese_object.get_data_directory,
-                                                                                                                               project_sample_runscript_location_dir_name,
-                                                                                                                               self.msip_ese_object.get_reference_project_type,
-                                                                                                                               self.msip_ese_object.get_reference_project_name,
-                                                                                                                               self.msip_ese_object.get_reference_project_release,
-                                                                                                                               metal_stack))
+                    # Reference Project Part
+
+                    if self.msip_ese_object.check_for_reference_project_execution():
+
+                        create_directory(test_case_reference_root_dir, file_abs_name.upper())
+                        create_directory(test_case_reference_result_directory, file_abs_name.upper())
+
+                        test_case_reference_dir = os.path.join(test_case_reference_root_dir, file_abs_name.upper())
+                        test_case_reference_output_dir = os.path.join(test_case_reference_result_directory, file_abs_name.upper())
+
+                        self.create_sample_runscript(test_case_reference_dir, test_case_reference_output_dir, test_case_path, file_name, gds_info[0],
+                                                     os.path.join(self.msip_ese_object.get_data_directory,
+                                                                  project_sample_runscript_location_dir_name,
+                                                                  self.msip_ese_object.get_reference_project_type,
+                                                                  self.msip_ese_object.get_reference_project_name,
+                                                                  self.msip_ese_object.get_reference_project_release,
+                                                                  metal_stack,
+                                                                  project_extract_directory_name))
+
+            return shell_command_path
 
         def create_all_test_cases_extract_environments(self):
             """
@@ -2739,28 +2916,50 @@ chmod -R 777 *
             test_cases_hash = self.msip_ese_object.get_project_test_cases
             all_test_cases_name = test_cases_hash.keys()
 
-            for test_case_name in all_test_cases_name:
-                self.create_extract_environment(test_case_name, test_cases_hash[test_case_name])
+            all_shell_files = []
 
-        def execute_pex(self):
+            for test_case_name in all_test_cases_name:
+                all_shell_files.append(self.create_extract_environment(test_case_name, test_cases_hash[test_case_name]))
+
+            return all_shell_files
+
+        def execute_pex(self, test_case_dirs):
             """
             The function is executing all sh commands found under RUN_DIR
             :return:
             """
 
-            for root, directories, files in os.walk(self.msip_ese_object.get_script_run_directory):
-                for file_name in files:
-                    if file_name.endswith(".sh"):
-                        process = execute_external_command(os.path.join(root, file_name))
-                        print_to_stdout(self.msip_ese_object, "EXECUTING EXTERNAL PEX COMMAND:\t" + os.path.join(root, file_name))
-                        enable_waiting = True
-                        while enable_waiting:
-                            process_stdout = process.stdout.read()
-                            if get_string_length(process_stdout) > 0:
-                                print_to_stdout(self.msip_ese_object, process_stdout)
-                            else:
-                                enable_waiting = True
-                                print_to_stdout(self.msip_ese_object, "EXECUTING EXTERNAL PEX COMMAND FINISHED SUCCESSFULLY:")
+            for directory in test_case_dirs:
+                for root, directories, files in os.walk(directory):
+                    for file_name in files:
+                        if (file_name.endswith(".sh")) and ("UNTAR" not in root):
+                            process = execute_external_command(os.path.join(root, file_name))
+                            print_to_stdout(self.msip_ese_object, "EXECUTING EXTERNAL PEX COMMAND:\t" + os.path.join(root, file_name))
+                            process.wait()
+
+    class Simulation:
+        """
+        The Simulation instance class. Creating final deck for sim , executing and storing simulation
+        """
+
+        def __init__(self, msip_ese_object):
+            """
+            The initial function of the class
+            """
+
+            self.msip_ese_object = msip_ese_object
+
+    class Report:
+        """
+        The Reporting class
+        """
+
+        def __init__(self, msip_ese_object):
+            """
+            The initial function of the class
+            """
+
+            self.msip_ese_object = msip_ese_object
 
     def main(self):
         """
@@ -2775,6 +2974,8 @@ chmod -R 777 *
         print("\nPROCESSING ...\n")
 
         # Creating environment directories
+
+        print("\tSTEP1:\tPROCESSING ...\t\t# Reading Script Inputs")
 
         self.create_script_env_directories()
         # Opening log files for the script
@@ -2800,6 +3001,12 @@ chmod -R 777 *
         # The initialisation of Extract class instance
         test_cases_extract = self.Extract(self)
 
+        # The initialisation of Simulation class instance
+        simulate = self.Simulation(self)
+
+        # The initialisation of Report class
+        report = self.Report(self)
+
         # Setting Target Project Name/Release from Script Input or Excel File
         script_excel_instance.get_information_from_excel_file(self.get_script_excel_file)
         project_environment.setup_environment()
@@ -2808,21 +3015,33 @@ chmod -R 777 *
         self.check_script_setup_correctness()
 
         if self.check_if_update_environment():
+            print("\tSTEP2:\tPROCESSING ...\t\t# Checking For Project Environment Update")
             # The sample library extraction part
             project_environment.run_all_sample_extracts()
 
             # Grabbing and updating in the script environment the sample runscript files
             project_environment.grab_all_sample_run_scripts()
+            print("\t\tCOMPLETED")
+        else:
+            print("\tSTEP2:\tSkipping STEP 'Checking For Project Environment Update'")
 
         if self.check_if_update_test_case():
+            print("\tSTEP3:\tPROCESSING ...\t\t# Checking For Test Case Update")
             # Updating test cases
             test_cases.update_test_cases()
+            print("\t\tCOMPLETED")
+        else:
+            print("\tSTEP3:\tSkipping STEP 'Checking For Test Case Update'")
 
         if self.check_if_execute_pex():
+            print("\tSTEP4:\tPROCESSING ...\t\t# Running PEX on Test Case(s)")
             # Do extraction
             test_cases_extract.get_test_cases()
-            test_cases_extract.create_all_test_cases_extract_environments()
-            test_cases_extract.execute_pex()
+            test_case_dirs_list = test_cases_extract.create_all_test_cases_extract_environments()
+            test_cases_extract.execute_pex(test_case_dirs_list)
+            print("\t\tCOMPLETED")
+        else:
+            print("\tSTEP4:\tSkipping STEP 'Running PEX on Test Case(s)'")
 
 
 def main():
