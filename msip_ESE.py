@@ -98,7 +98,7 @@ available_excel_options = ["Test Case Name",
                            "Test bench",
                            "GDS file(s)",
                            "LVS Netlist file(s)",
-                           "Extract Type For GDS file(s)",
+                           "Extraction Criteria For GDS file(s)",
                            "Simulation options",
                            "Measure file(s)",
                            "Other Include(s)",
@@ -116,8 +116,10 @@ available_excel_options = ["Test Case Name",
                            "Reference LVS Tool Version",
                            "Target LVS deck",
                            "Reference LVS deck",
-                           "Target LVS options/sourceme",
-                           "Reference LVS options/sourceme",
+                           "Target LVS sourceme",
+                           "Target LVS options",
+                           "Reference LVS sourceme",
+                           "Reference LVS options",
                            "Target RCXT version",
                            "Reference RCXT version",
                            "Target RCXT deck",
@@ -130,6 +132,15 @@ available_excel_options = ["Test Case Name",
                            "Reference Simulation Tool Version",
                            "Other Comments"]
 
+# All available data regarding project setup
+project_setup_data = ["PEX TOOL NAME",              # Index[0]  The LVS tool name ICV/CALIBRE/HERCULES
+                      "PEX TOOL VERSION",           # Index[1]  The LVS tool version
+                      "PEX DECK",                   # Index[2]  The LVS deck
+                      "RCXT TOOL VERSION",          # Index[3]  The STAR RC tool version
+                      "RCXT DECK",                  # Index[4]  The STAR RC typical.rules tcad grid file
+                      "RCXT STARCMD",               # Index[5]  The STAR RC starcmd file
+                      ]
+
 # Test Case Directory Structure
 project_test_case_directories_list = ["EXCEL", "GDS", "LVS_NETLIST", "TEST_BENCH"]
 untar_directory_name = "UNTAR"
@@ -138,6 +149,7 @@ untar_directory_name = "UNTAR"
 project_environment_file_name = "env.tcl"
 project_cad_directory_name = "cad"
 project_extract_directory_name = "PEX"
+project_sim_directory_name = "SIM"
 project_SPF_directory_name = "SPF"
 project_sample_oa_library_directory_name = "SAMPLE_OA_LIBRARIES"
 project_sample_oa_library_names_list = ["SampleLibrary"]
@@ -152,6 +164,7 @@ available_project_tools_name = ["ICV",  # INDEX 0 Default value
 project_lvs_report_extensions = {available_project_tools_name[0]: ".LVS_ERRORS",
                                  available_project_tools_name[1]: ".LVS_ERRORS",
                                  available_project_tools_name[2]: ".cell_results"}
+
 project_extract_file_extension = ".spf"
 project_extract_ideal_file_prefix = "ideal_"
 project_extract_ideal_file_extension = ".raw"
@@ -162,6 +175,9 @@ tar_file_extension = ".tar.gz"
 
 available_package_directory_tags_list = ["insideTarFile:", "insideTestCasePackagePath:"]
 
+top_cell_subckt_file_name = "topCellSubcktFile"
+subckt_start_recognition_word = ".subckt"
+subckt_end_recognition_word = ".end"
 
 # --------------------------------------------------- #
 # -------------------- Functions -------------------- #
@@ -751,7 +767,7 @@ class MsipEse:
 
         # The projects root directory
         self.projects_root_dir = None
-        self.set_projects_root_dir("/remote/proj")
+        self.set_projects_root_dir("/remote/cad-rep/projects")
 
         # The script Log directory
         self.script_log_dir = None
@@ -828,6 +844,61 @@ class MsipEse:
         # Reference PEX Tool name
         self.reference_project_pex_tool_name = None
         self.set_reference_project_pex_tool_name(None)
+
+        # Target PEX Tool name
+        self.target_project_pex_tool_version = None
+        self.set_target_project_pex_tool_version(None)
+
+        # Reference PEX Tool name
+        self.reference_project_pex_tool_version = None
+        self.set_reference_project_pex_tool_version(None)
+
+        # Target PEX Tool name
+        self.target_project_pex_tool_deck = None
+        self.set_target_project_pex_tool_deck(None)
+
+        # Reference PEX Tool name
+        self.reference_project_pex_tool_deck = None
+        self.set_reference_project_pex_tool_deck(None)
+
+        # Target PEX Tool name
+        self.target_project_pex_tool_option_file = None
+        self.set_target_project_pex_tool_option_file(None)
+
+        # Reference PEX Tool name
+        self.reference_project_pex_tool_option_file = None
+        self.set_reference_project_pex_tool_option_file(None)
+
+        self.target_project_pex_tool_source_file = None
+        self.set_target_project_pex_tool_source_file(None)
+
+        # Reference PEX Tool name
+        self.reference_project_pex_tool_source_file = None
+        self.set_reference_project_pex_tool_source_file(None)
+
+        # Target EXTRACT Tool
+        self.target_project_extract_tool_version = None
+        self.set_target_project_extract_tool_version(None)
+
+        # Reference EXTRACT Tool
+        self.reference_project_extract_tool_version = None
+        self.set_reference_project_extract_tool_version(None)
+
+        # Target EXTRACT Tool
+        self.target_project_extract_tool_deck = None
+        self.set_target_project_extract_tool_deck(None)
+
+        # Reference EXTRACT Tool
+        self.reference_project_extract_tool_deck = None
+        self.set_reference_project_extract_tool_deck(None)
+
+        # Target EXTRACT Tool
+        self.target_project_extract_tool_starcmd = None
+        self.set_target_project_extract_tool_starcmd(None)
+
+        # Reference EXTRACT Tool
+        self.reference_project_extract_tool_starcmd = None
+        self.set_reference_project_extract_tool_starcmd(None)
 
         # Force adding test case enable
         self.force_add_test_case = False
@@ -1024,19 +1095,51 @@ class MsipEse:
         if str(flow_option_value).upper() == "NONE":
             return
         elif flow_option_value == available_flows[0]:
-            self.enable_update_environment()
+            self.enable_update_environment()        # 1. Enabled
+            self.disable_update_test_case()         # Disabled
+            self.disable_execute_pex()              # Disabled
+            self.disable_execute_simulation()       # Disabled
+            self.disable_execute_report()           # Disabled
+            self.disable_execute_clean_project()    # Disabled
         elif flow_option_value == available_flows[1]:
-            self.enable_update_test_case()
+            self.disable_update_environment()       # Disabled
+            self.enable_update_test_case()          # 2. Enabled
+            self.disable_execute_pex()              # Disabled
+            self.disable_execute_simulation()       # Disabled
+            self.disable_execute_report()           # Disabled
+            self.disable_execute_clean_project()    # Disabled
         elif flow_option_value == available_flows[2]:
             # Executing Flow Step 3
-            self.enable_execute_pex()
+            self.disable_update_environment()       # Disabled
+            self.disable_update_test_case()         # Disabled
+            self.enable_execute_pex()               # 3. Enabled
+            self.disable_execute_simulation()       # Disabled
+            self.disable_execute_report()           # Disabled
+            self.disable_execute_clean_project()    # Disabled
         elif flow_option_value == available_flows[3]:
             # Executing Flow Step 4
-            self.enable_execute_simulation()
+            self.disable_update_environment()       # Disabled
+            self.disable_update_test_case()         # Disabled
+            self.disable_execute_pex()              # Disabled
+            self.enable_execute_simulation()        # 4. Enabled
+            self.disable_execute_report()           # Disabled
+            self.disable_execute_clean_project()    # Disabled
         elif flow_option_value == available_flows[4]:
-            self.enable_execute_report()
+            # Executing Flow Step 5
+            self.disable_update_environment()       # Disabled
+            self.disable_update_test_case()         # Disabled
+            self.disable_execute_pex()              # Disabled
+            self.disable_execute_simulation()       # Disabled
+            self.enable_execute_report()            # 5. Enabled
+            self.disable_execute_clean_project()    # Disabled
         elif flow_option_value == available_flows[5]:
-            self.enable_execute_clean_project()
+            # Executing Flow Step 5
+            self.disable_update_environment()       # Disabled
+            self.disable_update_test_case()         # Disabled
+            self.disable_execute_pex()              # Disabled
+            self.disable_execute_simulation()       # Disabled
+            self.disable_execute_report()           # Disabled
+            self.enable_execute_clean_project()     # 6. Enabled
         else:
             # Executing All Steps of The Flow
             self.enable_update_environment()
@@ -1117,6 +1220,258 @@ class MsipEse:
         """
 
         return self.reference_project_pex_tool_name
+
+    def set_target_project_pex_tool_version(self, value):
+        """
+        The function is setting target project PEX tool version
+        :param value:
+        :return:
+        """
+
+        self.target_project_pex_tool_version = value
+
+    @property
+    def get_target_project_pex_tool_version(self):
+        """
+        The function is returning target project pex tool name
+        :return:
+        """
+
+        return self.target_project_pex_tool_version
+
+    def set_reference_project_pex_tool_version(self, value):
+        """
+        The function is setting target project PEX tool name
+        :param value:
+        :return:
+        """
+
+        self.reference_project_pex_tool_version = value
+
+    @property
+    def get_reference_project_pex_tool_version(self):
+        """
+        The function is returning target project pex tool name
+        :return:
+        """
+
+        return self.reference_project_pex_tool_version
+
+    def set_target_project_extract_tool_version(self, value):
+        """
+        The function is setting target project PEX tool version
+        :param value:
+        :return:
+        """
+
+        self.target_project_extract_tool_version = value
+
+    @property
+    def get_target_project_extract_tool_version(self):
+        """
+        The function is returning target project pex tool name
+        :return:
+        """
+
+        return self.target_project_extract_tool_version
+
+    def set_reference_project_extract_tool_version(self, value):
+        """
+        The function is setting target project PEX tool name
+        :param value:
+        :return:
+        """
+
+        self.reference_project_extract_tool_version = value
+
+    @property
+    def get_reference_project_extract_tool_version(self):
+        """
+        The function is returning target project pex tool name
+        :return:
+        """
+
+        return self.reference_project_extract_tool_version
+
+    def set_target_project_extract_tool_deck(self, value):
+        """
+        The function is setting target project PEX tool version
+        :param value:
+        :return:
+        """
+
+        self.target_project_extract_tool_deck = value
+
+    @property
+    def get_target_project_extract_tool_deck(self):
+        """
+        The function is returning target project pex tool name
+        :return:
+        """
+
+        return self.target_project_extract_tool_deck
+
+    def set_reference_project_extract_tool_deck(self, value):
+        """
+        The function is setting target project PEX tool name
+        :param value:
+        :return:
+        """
+
+        self.reference_project_extract_tool_deck = value
+
+    @property
+    def get_reference_project_extract_tool_deck(self):
+        """
+        The function is returning target project pex tool name
+        :return:
+        """
+
+        return self.reference_project_extract_tool_deck
+
+    def set_target_project_extract_tool_starcmd(self, value):
+        """
+        The function is setting target project PEX tool version
+        :param value:
+        :return:
+        """
+
+        self.target_project_extract_tool_starcmd = value
+
+    @property
+    def get_target_project_extract_tool_starcmd(self):
+        """
+        The function is returning target project pex tool name
+        :return:
+        """
+
+        return self.target_project_extract_tool_starcmd
+
+    def set_reference_project_extract_tool_starcmd(self, value):
+        """
+        The function is setting target project PEX tool name
+        :param value:
+        :return:
+        """
+
+        self.reference_project_extract_tool_starcmd = value
+
+    @property
+    def get_reference_project_extract_tool_starcmd(self):
+        """
+        The function is returning target project pex tool name
+        :return:
+        """
+
+        return self.reference_project_extract_tool_starcmd
+
+    def set_target_project_pex_tool_deck(self, value):
+        """
+        The function is setting target project PEX tool version
+        :param value:
+        :return:
+        """
+
+        self.target_project_pex_tool_deck = value
+
+    @property
+    def get_target_project_pex_tool_deck(self):
+        """
+        The function is returning target project pex tool name
+        :return:
+        """
+
+        return self.target_project_pex_tool_deck
+
+    def set_reference_project_pex_tool_deck(self, value):
+        """
+        The function is setting target project PEX tool name
+        :param value:
+        :return:
+        """
+
+        self.reference_project_pex_tool_deck = value
+
+    @property
+    def get_reference_project_pex_tool_deck(self):
+        """
+        The function is returning target project pex tool name
+        :return:
+        """
+
+        return self.reference_project_pex_tool_deck
+
+    def set_target_project_pex_tool_option_file(self, value):
+        """
+        The function is setting target project PEX tool version
+        :param value:
+        :return:
+        """
+
+        self.target_project_pex_tool_option_file = value
+
+    @property
+    def get_target_project_pex_tool_option_file(self):
+        """
+        The function is returning target project pex tool name
+        :return:
+        """
+
+        return self.target_project_pex_tool_option_file
+
+    def set_reference_project_pex_tool_option_file(self, value):
+        """
+        The function is setting target project PEX tool name
+        :param value:
+        :return:
+        """
+
+        self.reference_project_pex_tool_option_file = value
+
+    @property
+    def get_reference_project_pex_tool_option_file(self):
+        """
+        The function is returning target project pex tool name
+        :return:
+        """
+
+        return self.reference_project_pex_tool_option_file
+
+    def set_target_project_pex_tool_source_file(self, value):
+        """
+        The function is setting target project PEX tool version
+        :param value:
+        :return:
+        """
+
+        self.target_project_pex_tool_source_file = value
+
+    @property
+    def get_target_project_pex_tool_source_file(self):
+        """
+        The function is returning target project pex tool name
+        :return:
+        """
+
+        return self.target_project_pex_tool_source_file
+
+    def set_reference_project_pex_tool_source_file(self, value):
+        """
+        The function is setting target project PEX tool name
+        :param value:
+        :return:
+        """
+
+        self.reference_project_pex_tool_source_file = value
+
+    @property
+    def get_reference_project_pex_tool_source_file(self):
+        """
+        The function is returning target project pex tool name
+        :return:
+        """
+
+        return self.reference_project_pex_tool_source_file
 
     def get_excel_setup(self):
         """
@@ -1350,7 +1705,7 @@ class MsipEse:
 
     def set_projects_root_dir(self, directory_path):
         """
-        The function is defining projects root directory, by default it is /remote/proj
+        The function is defining projects root directory, by default it is /remote/cad-rep/projects
         :param directory_path:
         :return:
         """
@@ -1360,7 +1715,7 @@ class MsipEse:
     @property
     def get_projects_root_dir(self):
         """
-        The function is returning projects root directory, by default it is /remote/proj
+        The function is returning projects root directory, by default it is /remote/cad-rep/projects
         :return:
         """
 
@@ -1368,7 +1723,7 @@ class MsipEse:
 
     def set_script_excel_file(self, file_location):
         """
-        The function is defining projects root directory, by default it is /remote/proj
+        The function is defining projects root directory, by default it is /remote/cad-rep/projects
         :param file_location:
         :return:
         """
@@ -1404,7 +1759,7 @@ class MsipEse:
 
     def set_target_project_name(self, value):
         """
-        The function is defining projects root directory, by default it is /remote/proj
+        The function is defining projects root directory, by default it is /remote/cad-rep/projects
         :param value:
         :return:
         """
@@ -1422,7 +1777,7 @@ class MsipEse:
 
     def set_target_project_release(self, value):
         """
-        The function is defining projects root directory, by default it is /remote/proj
+        The function is defining projects root directory, by default it is /remote/cad-rep/projects
         :param value:
         :return:
         """
@@ -1458,7 +1813,7 @@ class MsipEse:
 
     def set_reference_project_name(self, value):
         """
-        The function is defining projects root directory, by default it is /remote/proj
+        The function is defining projects root directory, by default it is /remote/cad-rep/projects
         :param value:
         :return:
         """
@@ -1476,7 +1831,7 @@ class MsipEse:
 
     def set_reference_project_release(self, value):
         """
-        The function is defining projects root directory, by default it is /remote/proj
+        The function is defining projects root directory, by default it is /remote/cad-rep/projects
         :param value:
         :return:
         """
@@ -1494,7 +1849,7 @@ class MsipEse:
 
     def set_target_project_metal_stack_list(self, list_value):
         """
-        The function is defining projects root directory, by default it is /remote/proj
+        The function is defining projects root directory, by default it is /remote/cad-rep/projects
         :param list_value:
         :return:
         """
@@ -1514,7 +1869,7 @@ class MsipEse:
 
     def set_reference_project_metal_stack_list(self, list_value):
         """
-        The function is defining projects root directory, by default it is /remote/proj
+        The function is defining projects root directory, by default it is /remote/cad-rep/projects
         :param list_value:
         :return:
         """
@@ -1552,7 +1907,7 @@ class MsipEse:
 
     def set_executed_test_case_package(self, value):
         """
-        The function is defining projects root directory, by default it is /remote/proj
+        The function is defining projects root directory, by default it is /remote/cad-rep/projects
         :param value:
         :return:
         """
@@ -1822,9 +2177,29 @@ ude \\
             :return:
             """
 
-            tcl_command = str("dm::addToLibDefs {0} -path {2}/{0}\nMSIP_PV::runBatchList lpe RCXT {0} SampleExtract layout {1} {2}/config").format(sample_library_name,
-                                                                                                                                                   tool_name,
-                                                                                                                                                   run_directory)
+            target_library_path = create_directories_hierarchy(run_directory, ["LIB", sample_library_name])
+
+            tcl_command = str("""set newSampleLibrary [dm::createLib SampleLibrary -path $RUN_DIR]
+
+db::attachTech $newSampleLibrary -refLibName devices
+db::attachTech $newSampleLibrary -refLibName devices
+
+set newSampleCell [dm::createCell SampleExtract -libName SampleLibrary]
+set layoutCell [dm::createCellView layout -cell $newSampleCell -viewType maskLayout]
+set schematicCell [dm::createCellView schematic -cell $newSampleCell -viewType schematic]
+
+set layoutDesign [de::open $layoutCell]
+le::createInst rpp -libName devices -cellName rpp -viewName layout -design [ed] -origin {0 0}
+de::save [de::getContexts]
+de::close [de::getContexts]
+
+set schematicDesign [de::open $schematicCell]
+se::createInst rpp -libName devices -cellName rpp -viewName symbol -design [ed] -origin {0 0}
+de::save [de::getContexts]
+de::close [de::getContexts]""").replace("$RUN_DIR", target_library_path)
+
+            # Before used "dm::addToLibDefs {0} -path {2}/{0}" + below
+            tcl_command += str("\nMSIP_PV::runBatchList lpe RCXT {0} SampleExtract layout {1} {2}/config").format(sample_library_name, tool_name, run_directory)
 
             return tcl_command
 
@@ -1856,6 +2231,32 @@ set outDir "{1}" \n""".format(run_directory, output_directory)
             # sourceme_command = "module unload msip_cd_pv\nmodule load msip_cd_pv"
 
             return ""
+
+        def remove_existing_sample_library(self, project_type, project_name, project_release, lib_path):
+            """
+            The function is checking for sample file present and removing if it is exist
+            :return:
+            """
+
+            print_to_stdout(self.msip_ese_object, "Removing Sample Library from Run directory if it is exist, and creating new one")
+
+            user_home_directory = os.environ["HOME"]
+            project_lib_defs_file = os.path.join(user_home_directory, "cd_lib", project_type, project_name, project_release, "design")
+            lib_defs_file_object = open_file_for_reading(project_lib_defs_file, "lib.defs")
+            new_lib_defs_content = ""
+            for line in lib_defs_file_object.readlines():
+                if "DEFINE SampleLibrary " not in line:
+                    new_lib_defs_content += line
+
+            lib_defs_file_object.close()
+            lib_defs_file_object = open_file_for_writing(project_lib_defs_file, "lib.defs")
+            lib_defs_file_object.write(new_lib_defs_content)
+            lib_defs_file_object.close()
+
+            try:
+                shutil.rmtree(os.path.join(lib_path, "LIB"))
+            except IOError:
+                exit("Cannot remove directory\t" + os.path.join(lib_path, "LIB"))
 
         def generate_sample_environment(self, pex_tool_name, sample_library_name, project_type, project_name, project_release, project_metal_stack, command_run_directory,
                                         output_directory):
@@ -1900,6 +2301,8 @@ set outDir "{1}" \n""".format(run_directory, output_directory)
             ude_config_command_file_object.writelines(config_command)
             ude_config_command_file_object.close()
 
+            self.remove_existing_sample_library(project_type, project_name, project_release, command_run_directory)
+
             process = execute_external_command(
                 os.path.join(command_run_directory, "execute_ude_" + project_type + "_" + project_name + "_" + project_release + "_" + project_metal_stack))
 
@@ -1921,12 +2324,18 @@ set outDir "{1}" \n""".format(run_directory, output_directory)
                 create_directory(run_dir, sample_library_name)
                 target_dir = os.path.join(run_dir, sample_library_name)
                 print_to_stdout(self.msip_ese_object, "GENERATING SAMPLE LIBRARY EXTRACTION FOR METAL STACK:\t" + str(metal_stack))
-                untar_zip_package(os.path.join(self.msip_ese_object.get_data_directory, project_sample_oa_library_directory_name, sample_library_name + tar_file_extension),
-                                  target_dir)
+                # untar_zip_package(os.path.join(self.msip_ese_object.get_data_directory, project_sample_oa_library_directory_name, sample_library_name + tar_file_extension),
+                #                   target_dir)
                 process = self.generate_sample_environment(str(pex_tool_name).lower(), sample_library_name, project_type, project_name, project_release, metal_stack, target_dir,
                                                            target_dir)
-                process.wait()
-                print_to_stdout(self.msip_ese_object, "\nEnvironment executed successfully\n")
+                time.sleep(5 * 60)     # 5 * 60sec = 5 minutes
+                if check_if_string_is_empty(str(process.stdout.read())):
+                    print_to_stdout(self.msip_ese_object, "\nEnvironment executed successfully\n")
+                else:
+                    process.kill()
+                    print_to_stderr(self.msip_ese_object, "\nThe Sample Runscript execution is take more than 5 min. ESE flow is killed the sample runscript execution."
+                                                          "Please check what is caused the issue\n"
+                                                          "\tPath of the command file is:\t" + target_dir + "\n" + str(process.stdout.read()))
 
         def run_all_sample_extracts(self):
             """
@@ -2091,9 +2500,12 @@ set outDir "{1}" \n""".format(run_directory, output_directory)
             :return:
             """
 
-            if "sourceme" in line:
-                line_l = str(line).split()
-                return 'export PEX_SOURCE_ME=' + line_l[1] + '\n' + line.replace(line_l[1], "$PEX_SOURCE_ME")
+            if "source" in line:
+                if "global" not in line:
+                    line_l = str(line).split()
+                    return 'export PEX_SOURCE_ME=' + line_l[1] + '\n' + line.replace(line_l[1], "$PEX_SOURCE_ME")
+                else:
+                    return 'export PEX_SOURCE_ME=""\n' + line
             else:
                 return line
 
@@ -2144,10 +2556,32 @@ set outDir "{1}" \n""".format(run_directory, output_directory)
             line_l = line.split()
             if "-output" in line:
                 output_dir = get_file_path(line_l[line_l.index("-output") + 1])
-                print(lvs_netlist)
                 return ['export OUTPUT_DIR="";\n' + line.replace(lvs_netlist, "${LVS_NETLIST}").replace(run_dir, "${RUN_DIR}").replace(output_dir, "${OUTPUT_DIR}"), output_dir]
             else:
                 return ["", "NONE"]
+
+        @staticmethod
+        def parse_star_cmd_line(line):
+            """
+            The function is replacing star rc deck and starcmd files to global variable
+            :param line:
+            :return:
+            """
+
+            target_line = ""
+            line_list = line.split("\n")
+            for line_string in line_list:
+                if "gen_starcmd" in line_string:
+                    line_string_list = line_string.split()
+                    starcmd = line_string_list[line_string_list.index("-cf") + 1]
+                    target_line += 'export STARCMD="' + starcmd + '"\n'
+                    tcad = line_string_list[line_string_list.index("-tcad") + 1]
+                    target_line += 'export TCAD="' + tcad + '"\n'
+                    target_line += line_string.replace(starcmd, "$STARCMD").replace(tcad, "$TCAD")
+                else:
+                    target_line += line_string + "\n"
+
+            return target_line
 
         def update_environment_sample_runscript_files(self, file_item, path_to_place, tool_name):
             """
@@ -2197,6 +2631,7 @@ set outDir "{1}" \n""".format(run_directory, output_directory)
                     if star_cmd_recognition_line in line:
                         command_result = self.replace_output_directory(line, get_file_path(file_item), lvs_file)
                         line = command_result[0]
+                        line = self.parse_star_cmd_line(line)
                         output_dir = command_result[1]
 
                     enable_writing = True
@@ -2390,10 +2825,12 @@ set outDir "{1}" \n""".format(run_directory, output_directory)
 
             print("USER INPUTS:\n")
 
+            self.msip_ese_object.set_executed_flow("")
+
             # Setting script inputs
             for script_option_name in script_inputs_all_options:
                 script_option_value = script_inputs_argument_hash[script_option_name]
-                print("\t" + script_option_name + "\t" + script_option_value)
+                print("\t" + script_option_name + "\t" * set_number_of_tabs(script_option_name, 4) + script_option_value)
                 if script_option_name == available_script_options[0]:
                     self.msip_ese_object.set_script_excel_file(script_option_value)
                 elif script_option_name == available_script_options[1]:
@@ -2409,7 +2846,7 @@ set outDir "{1}" \n""".format(run_directory, output_directory)
                 elif script_option_name == available_script_options[6]:
                     self.msip_ese_object.set_executed_test_case_package(script_option_value)
                 elif script_option_name == available_script_options[7]:
-                    self.msip_ese_object.set_projects_root_directory(script_option_value)
+                    self.msip_ese_object.set_projects_root_dir(script_option_value)
                 elif script_option_name == available_script_options[8]:
                     self.msip_ese_object.enable_force_add_test_case()
                 elif script_option_name == available_script_options[9]:
@@ -2527,6 +2964,11 @@ set outDir "{1}" \n""".format(run_directory, output_directory)
                             print_to_stdout(self.msip_ese_object, "WARNING!!:\tWrong file/directory for '{0}' excel option".format(available_excel_options[5]))
                 else:
                     print_to_stdout(self.msip_ese_object, "WARNING!!:\tEmpty value for '{0}' excel option".format(available_excel_options[5]))
+
+            # In This line all spaces was removing to make parsing step of the excel file more easy
+            self.msip_ese_object.excel_setup[available_excel_options[7]] = self.msip_ese_object.excel_setup[available_excel_options[7]].replace(" ", "")
+            self.msip_ese_object.excel_setup[available_excel_options[8]] = self.msip_ese_object.excel_setup[available_excel_options[8]].replace(" ", "")
+
             return self
 
     class TestCases:
@@ -2660,9 +3102,8 @@ chmod -R 777 *
             create_directory(destination_directory, project_test_case_directories_list[3])
             self.move_file(self.msip_ese_object.excel_setup[available_excel_options[6]], source_directory, os.path.join(destination_directory,
                                                                                                                         project_test_case_directories_list[3]))
-
             # Moving LVS and GDS Files
-            gds_files_list = self.msip_ese_object.excel_setup[available_excel_options[7]].split(",")
+            gds_files_list = self.msip_ese_object.excel_setup[available_excel_options[7]].replace(" ", "").split(",")
             create_directory(destination_directory, project_test_case_directories_list[1])
             for gds_file in gds_files_list:
                 gds_target_file = self.move_file(gds_file, source_directory, os.path.join(destination_directory, project_test_case_directories_list[1]))
@@ -2673,6 +3114,11 @@ chmod -R 777 *
             create_directory(destination_directory, project_test_case_directories_list[2])
             for lvs_file in lvs_files_list:
                 self.move_file(lvs_file, source_directory, os.path.join(destination_directory, project_test_case_directories_list[2]))
+
+            # Copy the excel file into the test bench directory
+            create_directory(destination_directory, project_test_case_directories_list[0])
+            excel_file = self.msip_ese_object.get_script_excel_file
+            shutil.copy(excel_file, os.path.join(destination_directory, project_test_case_directories_list[0], get_file_name_from_path(excel_file)))
 
         def update_test_cases(self):
             """
@@ -2703,6 +3149,31 @@ chmod -R 777 *
 
                     if check_for_dir_existence(get_file_path(source_directory_path), get_file_name_from_path(source_directory_path)):
                         self.move_test_case_files(source_directory_path, test_case_directory, test_case_untar_directory)
+
+    class GrabProjectSetup:
+        """
+        The class is for read the project setup
+        """
+
+        def __init__(self, msip_ese_object):
+            """
+            The initialisation of the object
+            :param msip_ese_object:
+            """
+
+            self.msip_ese_object = msip_ese_object
+
+        def get_project_setup(self, project_type, project_name, project_release):
+
+            print("grabbing project setup info")
+
+        def get_all_projects_setup(self):
+            """
+            The function is grabbing all project setup information and saving them in msip_ese_object variables
+            :return:
+            """
+
+            print("grabbing project setup info")
 
     class Extract:
         """
@@ -2758,7 +3229,9 @@ chmod -R 777 *
             if get_list_length(test_cases_hash.keys()) > 0:
                 self.msip_ese_object.set_project_test_cases(test_cases_hash)
             else:
-                print_to_stderr(self.msip_ese_object, "Cannot find any test case inside directory:\t'" + str(self.msip_ese_object.get_test_cases_directory) + "'")
+                print_to_stderr(self.msip_ese_object, "Cannot find any test case for project:\t'" + project_name + "' inside directory:\t'" + str(
+                    self.msip_ese_object.get_test_cases_directory) +
+                                "'")
 
         def create_sample_runscript(self, extract_run_directory, extract_output_dir, test_case_path, file_name, top_cell_name, sample_file_directory):
             """
@@ -2808,6 +3281,8 @@ chmod -R 777 *
             sample_file_object.close()
             block_extract_command_file_object.close()
 
+            self.create_top_cell_subckt_file(top_cell_name, file_base_name + ".cdl", extract_run_directory)
+
         def get_top_cell_name_and_metal(self, test_case_path, gds_file_name):
             """
             The function is returning top cell name and metal stack
@@ -2828,6 +3303,33 @@ chmod -R 777 *
                 config_file_object.close()
 
             return return_variable
+
+        @staticmethod
+        def create_top_cell_subckt_file(top_cell_name, lvs_netlist, target_dir):
+            """
+            The function is generating top cell subckt file for starcmd execution flow
+            :return:
+            """
+
+            global top_cell_subckt_file_name
+            lvs_file_object = open_file_for_reading(target_dir, get_file_name_from_path(lvs_netlist))
+            subckt_file_object = open_file_for_writing(target_dir, top_cell_subckt_file_name)
+
+            enable_writing = False
+
+            for line in lvs_file_object.readlines():
+                if line.startswith(subckt_start_recognition_word + " " + top_cell_name + " "):
+                    enable_writing = True
+                elif line.startswith(subckt_end_recognition_word):
+                    if enable_writing:
+                        subckt_file_object.writelines(line)
+                    enable_writing = False
+
+                if enable_writing:
+                    subckt_file_object.writelines(line)
+
+            lvs_file_object.close()
+            subckt_file_object.close()
 
         def create_extract_environment(self, test_case_name, test_case_path):
             """
@@ -2926,13 +3428,14 @@ chmod -R 777 *
         def execute_pex(self, test_case_dirs):
             """
             The function is executing all sh commands found under RUN_DIR
+            :param test_case_dirs:
             :return:
             """
 
             for directory in test_case_dirs:
                 for root, directories, files in os.walk(directory):
                     for file_name in files:
-                        if (file_name.endswith(".sh")) and ("UNTAR" not in root):
+                        if (file_name.endswith("_" + project_extract_directory_name + ".sh")) and ("UNTAR" not in root):
                             process = execute_external_command(os.path.join(root, file_name))
                             print_to_stdout(self.msip_ese_object, "EXECUTING EXTERNAL PEX COMMAND:\t" + os.path.join(root, file_name))
                             process.wait()
@@ -3063,11 +3566,15 @@ chmod -R 777 *
             print("\tSTEP5:\tPROCESSING ...\t\t# Running SIM on Test Case(s)")
             simulation.run_simulation()
             print("\t\tCOMPLETED")
+        else:
+            print("\tSTEP5:\tSkipping STEP 'Running SIM on Test Case(s)'")
 
         if self.check_if_execute_report():
             print("\tSTEP6:\tPROCESSING ...\t\t# Running Reporting step")
             report.gen_excel_report()
             print("\t\tCOMPLETED")
+        else:
+            print("\tSTEP5:\tSkipping STEP 'Running Reporting step'")
 
 
 def main():
