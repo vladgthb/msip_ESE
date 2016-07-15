@@ -14,6 +14,7 @@ import time
 import datetime
 from xlrd import open_workbook as read_excel_module
 from xlrd import XLRDError
+import errno
 
 __author__ = 'vlad'
 
@@ -53,6 +54,9 @@ ALL FUNCTIONS:
 # ---------------- Global Variables ----------------- #
 # --------------------------------------------------- #
 
+
+# Sample run script execution wait time. Default = 3 minute, You can change it
+sample_process_wait_time = 3
 
 # The script environment directories list
 environment_directories_name_list = ["LOGS",  # Index[0] Logs directory name
@@ -133,16 +137,16 @@ available_excel_options = ["Test Case Name",
                            "Other Comments"]
 
 # All available data regarding project setup
-project_setup_data = ["PEX TOOL NAME",              # Index[0]  The LVS tool name ICV/CALIBRE/HERCULES
-                      "PEX TOOL VERSION",           # Index[1]  The LVS tool version
-                      "PEX DECK",                   # Index[2]  The LVS deck
-                      "RCXT TOOL VERSION",          # Index[3]  The STAR RC tool version
-                      "RCXT DECK",                  # Index[4]  The STAR RC typical.rules tcad grid file
-                      "RCXT STARCMD",               # Index[5]  The STAR RC starcmd file
+project_setup_data = ["PEX TOOL NAME",  # Index[0]  The LVS tool name ICV/CALIBRE/HERCULES
+                      "PEX TOOL VERSION",  # Index[1]  The LVS tool version
+                      "PEX DECK",  # Index[2]  The LVS deck
+                      "RCXT TOOL VERSION",  # Index[3]  The STAR RC tool version
+                      "RCXT DECK",  # Index[4]  The STAR RC typical.rules tcad grid file
+                      "RCXT STARCMD",  # Index[5]  The STAR RC starcmd file
                       ]
 
 # Test Case Directory Structure
-project_test_case_directories_list = ["EXCEL", "GDS", "LVS_NETLIST", "TEST_BENCH"]
+project_test_case_directories_list = ["EXCEL", "GDS", "LVS_NETLIST", "TEST_BENCH", "MEASURE_FILES", "OTHER_INCLUDES", "USER_RESULTS"]
 untar_directory_name = "UNTAR"
 
 # The project environment file/directories name
@@ -178,6 +182,7 @@ available_package_directory_tags_list = ["insideTarFile:", "insideTestCasePackag
 top_cell_subckt_file_name = "topCellSubcktFile"
 subckt_start_recognition_word = ".subckt"
 subckt_end_recognition_word = ".end"
+
 
 # --------------------------------------------------- #
 # -------------------- Functions -------------------- #
@@ -365,6 +370,32 @@ def execute_external_command(command):
     """
 
     return Popen(command, shell=True, stdout=PIPE, stderr=PIPE)
+
+
+def process_timeout(process_object, text_to_display):
+    """
+    The function is
+    :param process_object:
+    :param text_to_display:
+    :return:
+    """
+
+    print("in function")
+
+    if process_object.poll() is None:
+        print("in if else")
+        try:
+            print("in try")
+            process_object.kill()
+            print(text_to_display)
+            return True
+        except OSError as e:
+            if e.errno != errno.ESRCH:
+                raise
+
+    else:
+        print("false")
+        return False
 
 
 # noinspection PyUnboundLocalVariable
@@ -819,6 +850,9 @@ class MsipEse:
         # Target Project Metal Stack List
         self.target_project_metal_stack_list = []
 
+        # Target Project Layer Map File Layers
+        self.target_project_layers = {}
+
         # Reference Project Type
         self.reference_project_type = None
 
@@ -830,6 +864,9 @@ class MsipEse:
 
         # Target Reference Metal Stack List
         self.reference_project_metal_stack_list = []
+
+        # Reference Project Layer Map File Layers
+        self.reference_project_layers = {}
 
         # Executed Test Case Package
         self.executed_test_case_package = None
@@ -1095,51 +1132,51 @@ class MsipEse:
         if str(flow_option_value).upper() == "NONE":
             return
         elif flow_option_value == available_flows[0]:
-            self.enable_update_environment()        # 1. Enabled
-            self.disable_update_test_case()         # Disabled
-            self.disable_execute_pex()              # Disabled
-            self.disable_execute_simulation()       # Disabled
-            self.disable_execute_report()           # Disabled
-            self.disable_execute_clean_project()    # Disabled
+            self.enable_update_environment()  # 1. Enabled
+            self.disable_update_test_case()  # Disabled
+            self.disable_execute_pex()  # Disabled
+            self.disable_execute_simulation()  # Disabled
+            self.disable_execute_report()  # Disabled
+            self.disable_execute_clean_project()  # Disabled
         elif flow_option_value == available_flows[1]:
-            self.disable_update_environment()       # Disabled
-            self.enable_update_test_case()          # 2. Enabled
-            self.disable_execute_pex()              # Disabled
-            self.disable_execute_simulation()       # Disabled
-            self.disable_execute_report()           # Disabled
-            self.disable_execute_clean_project()    # Disabled
+            self.disable_update_environment()  # Disabled
+            self.enable_update_test_case()  # 2. Enabled
+            self.disable_execute_pex()  # Disabled
+            self.disable_execute_simulation()  # Disabled
+            self.disable_execute_report()  # Disabled
+            self.disable_execute_clean_project()  # Disabled
         elif flow_option_value == available_flows[2]:
             # Executing Flow Step 3
-            self.disable_update_environment()       # Disabled
-            self.disable_update_test_case()         # Disabled
-            self.enable_execute_pex()               # 3. Enabled
-            self.disable_execute_simulation()       # Disabled
-            self.disable_execute_report()           # Disabled
-            self.disable_execute_clean_project()    # Disabled
+            self.disable_update_environment()  # Disabled
+            self.disable_update_test_case()  # Disabled
+            self.enable_execute_pex()  # 3. Enabled
+            self.disable_execute_simulation()  # Disabled
+            self.disable_execute_report()  # Disabled
+            self.disable_execute_clean_project()  # Disabled
         elif flow_option_value == available_flows[3]:
             # Executing Flow Step 4
-            self.disable_update_environment()       # Disabled
-            self.disable_update_test_case()         # Disabled
-            self.disable_execute_pex()              # Disabled
-            self.enable_execute_simulation()        # 4. Enabled
-            self.disable_execute_report()           # Disabled
-            self.disable_execute_clean_project()    # Disabled
+            self.disable_update_environment()  # Disabled
+            self.disable_update_test_case()  # Disabled
+            self.disable_execute_pex()  # Disabled
+            self.enable_execute_simulation()  # 4. Enabled
+            self.disable_execute_report()  # Disabled
+            self.disable_execute_clean_project()  # Disabled
         elif flow_option_value == available_flows[4]:
             # Executing Flow Step 5
-            self.disable_update_environment()       # Disabled
-            self.disable_update_test_case()         # Disabled
-            self.disable_execute_pex()              # Disabled
-            self.disable_execute_simulation()       # Disabled
-            self.enable_execute_report()            # 5. Enabled
-            self.disable_execute_clean_project()    # Disabled
+            self.disable_update_environment()  # Disabled
+            self.disable_update_test_case()  # Disabled
+            self.disable_execute_pex()  # Disabled
+            self.disable_execute_simulation()  # Disabled
+            self.enable_execute_report()  # 5. Enabled
+            self.disable_execute_clean_project()  # Disabled
         elif flow_option_value == available_flows[5]:
             # Executing Flow Step 5
-            self.disable_update_environment()       # Disabled
-            self.disable_update_test_case()         # Disabled
-            self.disable_execute_pex()              # Disabled
-            self.disable_execute_simulation()       # Disabled
-            self.disable_execute_report()           # Disabled
-            self.enable_execute_clean_project()     # 6. Enabled
+            self.disable_update_environment()  # Disabled
+            self.disable_update_test_case()  # Disabled
+            self.disable_execute_pex()  # Disabled
+            self.disable_execute_simulation()  # Disabled
+            self.disable_execute_report()  # Disabled
+            self.enable_execute_clean_project()  # 6. Enabled
         else:
             # Executing All Steps of The Flow
             self.enable_update_environment()
@@ -2253,6 +2290,8 @@ set outDir "{1}" \n""".format(run_directory, output_directory)
             lib_defs_file_object.write(new_lib_defs_content)
             lib_defs_file_object.close()
 
+            print_to_stdout(self.msip_ese_object, "Removing sample library directory\t" + os.path.join(lib_path, "LIB"))
+
             try:
                 shutil.rmtree(os.path.join(lib_path, "LIB"))
             except IOError:
@@ -2328,14 +2367,15 @@ set outDir "{1}" \n""".format(run_directory, output_directory)
                 #                   target_dir)
                 process = self.generate_sample_environment(str(pex_tool_name).lower(), sample_library_name, project_type, project_name, project_release, metal_stack, target_dir,
                                                            target_dir)
-                time.sleep(5 * 60)     # 5 * 60sec = 5 minutes
-                if check_if_string_is_empty(str(process.stdout.read())):
+                print_to_stdout(self.msip_ese_object, "Executing sample extraction command\t" + target_dir)
+                time.sleep(sample_process_wait_time * 60)  # 3 * 60sec = 3 minutes
+                report_text_if_long_run = str("\n\tThe Sample Runscript execution is take more than "
+                                              "" + str(sample_process_wait_time) + " min. ESE flow is killed the sample runscript execution. Please check what is caused the issue"
+                                                                                   "\n\tPath of the command file is:\t" + target_dir + "\n" + str(process.stdout.read()))
+                if not process_timeout(process, report_text_if_long_run):
                     print_to_stdout(self.msip_ese_object, "\nEnvironment executed successfully\n")
                 else:
-                    process.kill()
-                    print_to_stderr(self.msip_ese_object, "\nThe Sample Runscript execution is take more than 5 min. ESE flow is killed the sample runscript execution."
-                                                          "Please check what is caused the issue\n"
-                                                          "\tPath of the command file is:\t" + target_dir + "\n" + str(process.stdout.read()))
+                    print_to_stderr(self.msip_ese_object, report_text_if_long_run)
 
         def run_all_sample_extracts(self):
             """
@@ -2966,8 +3006,10 @@ set outDir "{1}" \n""".format(run_directory, output_directory)
                     print_to_stdout(self.msip_ese_object, "WARNING!!:\tEmpty value for '{0}' excel option".format(available_excel_options[5]))
 
             # In This line all spaces was removing to make parsing step of the excel file more easy
-            self.msip_ese_object.excel_setup[available_excel_options[7]] = self.msip_ese_object.excel_setup[available_excel_options[7]].replace(" ", "")
-            self.msip_ese_object.excel_setup[available_excel_options[8]] = self.msip_ese_object.excel_setup[available_excel_options[8]].replace(" ", "")
+            for index_number in range(get_list_length(available_excel_options)):
+                if self.msip_ese_object.excel_setup[available_excel_options[index_number]] is not None:
+                    self.msip_ese_object.excel_setup[available_excel_options[index_number]] = self.msip_ese_object.excel_setup[available_excel_options[index_number]].replace(" ",
+                                                                                                                                                                              "")
 
             return self
 
@@ -3089,6 +3131,22 @@ chmod -R 777 *
 
             print_to_stderr(self.msip_ese_object, "Cannot find gds config file for:\t" + target_gds_file)
 
+        def get_list_from_excel_line(self, line, index_name):
+            """
+            The function is simply making list from line, by splitting it with comma
+            :param line:
+            :param index_name
+            :return:
+            """
+
+            if line is not None:
+                try:
+                    return line.split(",")
+                except IOError:
+                    print_to_stderr(self.msip_ese_object, "Cannot parse the line from excel file\t" + index_name + ":\t" + line)
+            else:
+                return []
+
         def move_test_case_files(self, source_directory, destination_directory, untar_directory_path):
             """
             The function is moving all necessary data of the test case from source path to environment
@@ -3103,17 +3161,39 @@ chmod -R 777 *
             self.move_file(self.msip_ese_object.excel_setup[available_excel_options[6]], source_directory, os.path.join(destination_directory,
                                                                                                                         project_test_case_directories_list[3]))
             # Moving LVS and GDS Files
-            gds_files_list = self.msip_ese_object.excel_setup[available_excel_options[7]].replace(" ", "").split(",")
+            gds_files_list = self.get_list_from_excel_line(self.msip_ese_object.excel_setup[available_excel_options[7]], available_excel_options[7])
             create_directory(destination_directory, project_test_case_directories_list[1])
             for gds_file in gds_files_list:
                 gds_target_file = self.move_file(gds_file, source_directory, os.path.join(destination_directory, project_test_case_directories_list[1]))
                 self.generate_gds_config_file(gds_target_file, untar_directory_path, get_file_path(gds_target_file))
                 self.check_config_file_existence(gds_target_file)
 
-            lvs_files_list = self.msip_ese_object.excel_setup[available_excel_options[8]].split(",")
+            lvs_files_list = self.get_list_from_excel_line(self.msip_ese_object.excel_setup[available_excel_options[8]], available_excel_options[8])
             create_directory(destination_directory, project_test_case_directories_list[2])
             for lvs_file in lvs_files_list:
                 self.move_file(lvs_file, source_directory, os.path.join(destination_directory, project_test_case_directories_list[2]))
+
+            # Moving Measure Files
+            measure_files_list = self.get_list_from_excel_line(self.msip_ese_object.excel_setup[available_excel_options[11]], available_excel_options[11])
+            create_directory(destination_directory, project_test_case_directories_list[4])
+            for measure_file in measure_files_list:
+                self.move_file(measure_file, source_directory, os.path.join(destination_directory, project_test_case_directories_list[4]))
+
+            # Moving Other Include Files
+            include_files_list = self.get_list_from_excel_line(self.msip_ese_object.excel_setup[available_excel_options[12]], available_excel_options[12])
+            create_directory(destination_directory, project_test_case_directories_list[5])
+            for include_file in include_files_list:
+                self.move_file(include_file, source_directory, os.path.join(destination_directory, project_test_case_directories_list[5]))
+
+            # Moving User result files
+            user_result_files_list = self.get_list_from_excel_line(self.msip_ese_object.excel_setup[available_excel_options[13]], available_excel_options[13])
+            create_directory(destination_directory, project_test_case_directories_list[6])
+            for measure_file in user_result_files_list:
+                self.move_file(measure_file, source_directory, os.path.join(destination_directory, project_test_case_directories_list[6]))
+
+            user_result_files_list = self.get_list_from_excel_line(self.msip_ese_object.excel_setup[available_excel_options[14]], available_excel_options[14])
+            for spf_file in user_result_files_list:
+                self.move_file(spf_file, source_directory, os.path.join(destination_directory, project_test_case_directories_list[6]))
 
             # Copy the excel file into the test bench directory
             create_directory(destination_directory, project_test_case_directories_list[0])
@@ -3150,31 +3230,6 @@ chmod -R 777 *
                     if check_for_dir_existence(get_file_path(source_directory_path), get_file_name_from_path(source_directory_path)):
                         self.move_test_case_files(source_directory_path, test_case_directory, test_case_untar_directory)
 
-    class GrabProjectSetup:
-        """
-        The class is for read the project setup
-        """
-
-        def __init__(self, msip_ese_object):
-            """
-            The initialisation of the object
-            :param msip_ese_object:
-            """
-
-            self.msip_ese_object = msip_ese_object
-
-        def get_project_setup(self, project_type, project_name, project_release):
-
-            print("grabbing project setup info")
-
-        def get_all_projects_setup(self):
-            """
-            The function is grabbing all project setup information and saving them in msip_ese_object variables
-            :return:
-            """
-
-            print("grabbing project setup info")
-
     class Extract:
         """
         The Extract class
@@ -3188,6 +3243,47 @@ chmod -R 777 *
             """
 
             self.msip_ese_object = msip_ese_object
+
+        def grab_layer_numbers_from_layer_map(self, layer_map_file):
+            """
+            The function is returning list of layer numbers
+            :param layer_map_file:
+            :return:
+            """
+
+            all_layers = []
+
+            print_to_stdout(self.msip_ese_object, "Grabbing all layers from layer map:\t" + layer_map_file)
+
+            layer_map_object = open_file_for_reading(get_file_path(layer_map_file), get_file_name_from_path(layer_map_file))
+            for line in layer_map_object.readlines():
+                line_list = line.split()
+                if "#" != line_list[0][0]:
+                    if get_list_length(line_list) > 3:
+                        all_layers.append(line_list[2] + ":" + line_list[3])
+
+            return all_layers
+
+        def grab_all_layer_numbers_from_layer_map_file(self, project_type, project_name, project_release, metal_stack_list):
+            """
+            The function is searching for layermap file of the project and parsing all layers
+            :return:
+            """
+
+            layer_hash = {}
+
+            print_to_stdout(self.msip_ese_object,
+                            "Grabbing all layers for each metal stack's layer map file:\n\t" + project_type + "\n\t" + project_name + "\n\t" + project_release)
+
+            # Delete
+            for metal_stack in metal_stack_list:
+                layer_hash[metal_stack] = []
+                sample_runscript_path = os.path.join(self.msip_ese_object.get_data_directory, project_sample_runscript_location_dir_name, project_type, project_name,
+                                                     project_release, metal_stack, project_extract_directory_name)
+                runscript_file_object = open_file_for_reading(sample_runscript_path, project_sample_runscript_file_name)
+                for line in runscript_file_object.readlines():
+                    if "export STREAM_FILE=" in line:
+                        layer_hash[metal_stack] = self.grab_layer_numbers_from_layer_map(line.split('STREAM_FILE="')[1].replace('"', ""))
 
         def get_test_cases(self):
             """
@@ -3212,16 +3308,10 @@ chmod -R 777 *
                                 test_cases_hash[test_case_name] = test_case_directory
             else:
                 test_case_path = self.msip_ese_object.get_executed_test_case_package
-                if project_name in test_case_path:
-                    try:
-                        test_case_name = test_case_path.split("/")[-2]
-                    except IndexError:
-                        print_to_stderr(self.msip_ese_object, "Cannot find test case name from path\t" + str(test_case_path))
-                else:
-                    try:
-                        test_case_name = test_case_path.split("/")[-1]
-                    except IndexError:
-                        print_to_stderr(self.msip_ese_object, "Cannot find test case name from path\t" + str(test_case_path))
+                try:
+                    test_case_name = test_case_path.split("/")[-2]
+                except IndexError:
+                    print_to_stderr(self.msip_ese_object, "Cannot find test case name from path\t" + str(test_case_path))
 
                 # noinspection PyUnboundLocalVariable
                 test_cases_hash[test_case_name] = test_case_path
@@ -3275,7 +3365,7 @@ chmod -R 777 *
                 line = line.replace("export GDS_FILE=\"\";", "export GDS_FILE=" + file_base_name + gds_file_extension + ";")
                 line = line.replace("export LVS_NETLIST=\"\";", "export LVS_NETLIST=" + file_base_name + ".cdl")
                 line = line.replace("export OUTPUT_DIR=\"\"", "export OUTPUT_DIR=" + extract_output_dir)
-                line = line.replace("cd ${RUN_DIR};", "cd ${RUN_DIR};\nmkdir STAR_rcc_typical\n")
+                line = line.replace("cd ${RUN_DIR};", "cd ${RUN_DIR};\nmkdir STAR_rcc_typical\nmkdir STAR_rc_typical\nmkdir STAR_srccpcc_typical\nmkdir STAR_cc_typical\n")
                 block_extract_command_file_object.writelines(line)
 
             sample_file_object.close()
@@ -3289,7 +3379,7 @@ chmod -R 777 *
             :return:
             """
 
-            return_variable = ["", "11M_3Mx_6Dx_1Gx_1Iz_LB"]
+            return_variable = ["", "12M_2X_vh_1Ya_v_4Y_hvhv_2Yy2Z"]
 
             config_file = os.path.join(test_case_path, project_test_case_directories_list[1], gds_file_name + gds_config_file_extension)
             if not check_for_file_existence(os.path.join(test_case_path, project_test_case_directories_list[1]), gds_file_name + gds_config_file_extension):
@@ -3391,7 +3481,6 @@ chmod -R 777 *
                     # Reference Project Part
 
                     if self.msip_ese_object.check_for_reference_project_execution():
-
                         create_directory(test_case_reference_root_dir, file_abs_name.upper())
                         create_directory(test_case_reference_result_directory, file_abs_name.upper())
 
@@ -3494,7 +3583,7 @@ chmod -R 777 *
 
         # Creating environment directories
 
-        print("\tSTEP1:\tPROCESSING ...\t\t# Reading Script Inputs")
+        print("\tSTEP1:\tTIME:" + get_current_time() + "\tPROCESSING ...\t\t# Reading Script Inputs")
 
         self.create_script_env_directories()
         # Opening log files for the script
@@ -3532,49 +3621,50 @@ chmod -R 777 *
 
         # Checking for script input correctness
         self.check_script_setup_correctness()
+        print("\t\tTIME:" + get_current_time() + "\tCOMPLETED")
 
         if self.check_if_update_environment():
-            print("\tSTEP2:\tPROCESSING ...\t\t# Checking For Project Environment Update")
+            print("\tSTEP2:\tTIME:" + get_current_time() + "\tPROCESSING ...\t\t# Checking For Project Environment Update")
             # The sample library extraction part
             project_environment.run_all_sample_extracts()
 
             # Grabbing and updating in the script environment the sample runscript files
             project_environment.grab_all_sample_run_scripts()
-            print("\t\tCOMPLETED")
+            print("\t\tTIME:" + get_current_time() + "\tCOMPLETED")
         else:
-            print("\tSTEP2:\tSkipping STEP 'Checking For Project Environment Update'")
+            print("\tSTEP2:\tSkipping STEP 'Checking For Project Environment Update'\tTIME:" + get_current_time())
 
         if self.check_if_update_test_case():
-            print("\tSTEP3:\tPROCESSING ...\t\t# Checking For Test Case Update")
+            print("\tSTEP3:\tTIME:" + get_current_time() + "\tPROCESSING ...\t\t# Checking For Test Case Update")
             # Updating test cases
             test_cases.update_test_cases()
-            print("\t\tCOMPLETED")
+            print("\t\tTIME:" + get_current_time() + "\tCOMPLETED")
         else:
-            print("\tSTEP3:\tSkipping STEP 'Checking For Test Case Update'")
+            print("\tSTEP3:\tSkipping STEP 'Checking For Test Case Update'\tTIME:" + get_current_time())
 
         if self.check_if_execute_pex():
-            print("\tSTEP4:\tPROCESSING ...\t\t# Running PEX on Test Case(s)")
+            print("\tSTEP4:\tTIME:" + get_current_time() + "\tPROCESSING ...\t\t# Running PEX on Test Case(s)")
             # Do extraction
             test_cases_extract.get_test_cases()
             test_case_dirs_list = test_cases_extract.create_all_test_cases_extract_environments()
             test_cases_extract.execute_pex(test_case_dirs_list)
-            print("\t\tCOMPLETED")
+            print("\t\tTIME:" + get_current_time() + "\tCOMPLETED")
         else:
-            print("\tSTEP4:\tSkipping STEP 'Running PEX on Test Case(s)'")
+            print("\tSTEP4:\tSkipping STEP 'Running PEX on Test Case(s)'\tTIME:" + get_current_time())
 
         if self.check_if_execute_simulation():
-            print("\tSTEP5:\tPROCESSING ...\t\t# Running SIM on Test Case(s)")
+            print("\tSTEP5:\tTIME:" + get_current_time() + "\tPROCESSING ...\t\t# Running SIM on Test Case(s)")
             simulation.run_simulation()
-            print("\t\tCOMPLETED")
+            print("\t\tTIME:" + get_current_time() + "\tCOMPLETED")
         else:
-            print("\tSTEP5:\tSkipping STEP 'Running SIM on Test Case(s)'")
+            print("\tSTEP5:\tSkipping STEP 'Running SIM on Test Case(s)'\tTIME:" + get_current_time())
 
         if self.check_if_execute_report():
-            print("\tSTEP6:\tPROCESSING ...\t\t# Running Reporting step")
+            print("\tSTEP6:\tTIME:" + get_current_time() + "\tPROCESSING ...\t\t# Running Reporting step\tTIME:" + get_current_time())
             report.gen_excel_report()
-            print("\t\tCOMPLETED")
+            print("\t\tTIME:" + get_current_time() + "\tCOMPLETED")
         else:
-            print("\tSTEP5:\tSkipping STEP 'Running Reporting step'")
+            print("\tSTEP6:\tSkipping STEP 'Running Reporting step'\tTIME:" + get_current_time())
 
 
 def main():
