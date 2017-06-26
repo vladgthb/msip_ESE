@@ -16,7 +16,7 @@ from xlrd import open_workbook as read_excel_module
 from xlrd import XLRDError
 import errno
 
-__author__ = 'vlad'
+__author__ = 'Vladimir'
 
 """
 USAGE:  program
