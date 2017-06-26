@@ -14,6 +14,7 @@
       <w>mkdir</w>
       <w>netlist</w>
       <w>netlists</w>
+      <w>rundir</w>
       <w>nettran</w>
       <w>nmodule</w>
       <w>nodisplay</w>
@@ -22,7 +23,7 @@
       <w>popen</w>
       <w>pvbatch</w>
       <w>rcxt</w>
-      <w>rundir</w>
+      <w>rundirectory</w>
       <w>snpslmd</w>
       <w>sourceme</w>
       <w>srccpcc</w>
